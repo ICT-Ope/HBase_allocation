@@ -1,7 +1,7 @@
 diff -uNr hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp hbase-0.90.2-local/hbase-webapps/master/changetablegroup.jsp
 --- hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/changetablegroup.jsp	2011-06-24 17:03:28.000000000 +0800
-@@ -0,0 +1,213 @@
++++ hbase-0.90.2-local/hbase-webapps/master/changetablegroup.jsp	2011-06-29 15:49:20.000000000 +0800
+@@ -0,0 +1,216 @@
 +<%@ page language="java" import="java.util.*" import="java.io.*"
 +	import="org.apache.hadoop.hbase.master.HMaster"
 +	import="org.apache.hadoop.hbase.HTableDescriptor"
@@ -9,7 +9,7 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp hbase-0.90.2-lo
 +	import="org.apache.hadoop.hbase.HServerAddress"
 +	import="org.apache.hadoop.hbase.HServerInfo"
 +	import="org.apache.hadoop.hbase.util.Bytes"
-+	import="org.apache.hadoop.hbase.group.ServerWithGroup"
++	import="org.apache.hadoop.hbase.allocation.group.ServerWithGroup"
 +	import="org.apache.hadoop.hbase.ipc.ScheduleHBaseServer"
 +	import="org.apache.hadoop.hbase.master.GroupAssignmentManager"
 +	contentType="text/html; charset=GB18030" pageEncoding="GB18030"%>
@@ -26,6 +26,9 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp hbase-0.90.2-lo
 +
 +	<hr id="head_rule" />
 +	<%
++		/**
++		 * Class used for change table priority or groups
++		 */
 +		class ChangeTableGP implements Runnable {
 +			private String[] groups;
 +			private String priporty;
@@ -218,11 +221,11 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp hbase-0.90.2-lo
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/dogroupbalacne.jsp hbase-0.90.2-local/hbase-webapps/master/dogroupbalacne.jsp
 --- hbase-0.90.2/hbase-webapps/master/dogroupbalacne.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/dogroupbalacne.jsp	2011-06-24 17:03:28.000000000 +0800
-@@ -0,0 +1,69 @@
++++ hbase-0.90.2-local/hbase-webapps/master/dogroupbalacne.jsp	2011-06-29 15:49:31.000000000 +0800
+@@ -0,0 +1,72 @@
 +<%@ page language="java" 
 +	import="org.apache.hadoop.hbase.master.GroupAssignmentManager"
-+	import="org.apache.hadoop.hbase.group.ServerWithGroup"
++	import="org.apache.hadoop.hbase.allocation.group.ServerWithGroup"
 +	contentType="text/html; charset=GB18030"
 +    pageEncoding="GB18030"%>
 +<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
@@ -233,6 +236,9 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/dogroupbalacne.jsp hbase-0.90.2-loca
 +</head>
 +<body>
 +<%
++	/**
++	 * Class used for balance group regions
++	 */
 +	class Balancegroup implements Runnable{
 +		private String group;
 +		public Balancegroup(String group){
@@ -292,11 +298,11 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/dogroupbalacne.jsp hbase-0.90.2-loca
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/dotablebalance.jsp hbase-0.90.2-local/hbase-webapps/master/dotablebalance.jsp
 --- hbase-0.90.2/hbase-webapps/master/dotablebalance.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/dotablebalance.jsp	2011-06-24 17:03:28.000000000 +0800
-@@ -0,0 +1,138 @@
++++ hbase-0.90.2-local/hbase-webapps/master/dotablebalance.jsp	2011-06-29 15:49:44.000000000 +0800
+@@ -0,0 +1,141 @@
 +<%@ page language="java" import="java.util.*"
 +	import="org.apache.hadoop.hbase.master.GroupAssignmentManager"
-+	import="org.apache.hadoop.hbase.group.ServerWithGroup"
++	import="org.apache.hadoop.hbase.allocation.group.ServerWithGroup"
 +	import="org.apache.hadoop.hbase.master.HMaster"
 +	import="org.apache.hadoop.hbase.HRegionInfo"
 +	import="org.apache.hadoop.hbase.HServerInfo"
@@ -320,6 +326,9 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/dotablebalance.jsp hbase-0.90.2-loca
 +	
 +	<hr id="head_rule" />
 +	<%
++		/**
++	 	 * Class used for balance table regions
++	     */
 +		class Balancetable implements Runnable {
 +			private String table;
 +
@@ -435,7 +444,7 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/dotablebalance.jsp hbase-0.90.2-loca
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/groupinfo.jsp hbase-0.90.2-local/hbase-webapps/master/groupinfo.jsp
 --- hbase-0.90.2/hbase-webapps/master/groupinfo.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/groupinfo.jsp	2011-06-24 17:03:28.000000000 +0800
++++ hbase-0.90.2-local/hbase-webapps/master/groupinfo.jsp	2011-06-29 15:49:52.000000000 +0800
 @@ -0,0 +1,158 @@
 +<%@ page language="java" 
 +	import="java.util.*"
@@ -446,7 +455,7 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/groupinfo.jsp hbase-0.90.2-local/hba
 +	import="org.apache.hadoop.hbase.HServerAddress"
 +	import="org.apache.hadoop.hbase.HServerInfo"
 +	import="org.apache.hadoop.hbase.util.Bytes"
-+	import="org.apache.hadoop.hbase.group.ServerWithGroup"
++	import="org.apache.hadoop.hbase.allocation.group.ServerWithGroup"
 +	import="org.apache.hadoop.hbase.ipc.ScheduleHBaseServer"
 +	import="org.apache.hadoop.hbase.master.GroupAssignmentManager"
 +	contentType="text/html; charset=GB18030"
@@ -634,7 +643,7 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/moveremoteconf.sh hbase-0.90.2-local
 +fi
 diff -uNr hbase-0.90.2/hbase-webapps/master/processgroup.jsp hbase-0.90.2-local/hbase-webapps/master/processgroup.jsp
 --- hbase-0.90.2/hbase-webapps/master/processgroup.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/processgroup.jsp	2011-06-24 17:03:28.000000000 +0800
++++ hbase-0.90.2-local/hbase-webapps/master/processgroup.jsp	2011-06-29 15:50:11.000000000 +0800
 @@ -0,0 +1,261 @@
 +<%@ page language="java" import="java.util.*" import="java.io.*"
 +	import="org.apache.hadoop.hbase.master.HMaster"
@@ -646,10 +655,10 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/processgroup.jsp hbase-0.90.2-local/
 +	import="org.apache.hadoop.hbase.ZooKeeperConnectionException"
 +	import="org.apache.hadoop.hbase.HTableDescriptor"
 +	import="org.apache.hadoop.hbase.master.GroupAssignmentManager"
-+	import="org.apache.hadoop.hbase.group.ServerWithGroup"
-+	import="org.apache.hadoop.hbase.group.MoveGroupPlan"
-+	import="org.apache.hadoop.hbase.group.MoveConfImpl"
-+	import="org.apache.hadoop.hbase.group.ProcessMove"
++	import="org.apache.hadoop.hbase.allocation.group.ServerWithGroup"
++	import="org.apache.hadoop.hbase.allocation.group.MoveGroupPlan"
++	import="org.apache.hadoop.hbase.allocation.group.MoveConfImpl"
++	import="org.apache.hadoop.hbase.allocation.group.ProcessMove"
 +	contentType="text/html; charset=GB18030" pageEncoding="GB18030"%>
 +<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 +<html>
@@ -920,7 +929,7 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/restartserver.sh hbase-0.90.2-local/
 +fi
 diff -uNr hbase-0.90.2/hbase-webapps/master/showgroup.jsp hbase-0.90.2-local/hbase-webapps/master/showgroup.jsp
 --- hbase-0.90.2/hbase-webapps/master/showgroup.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/showgroup.jsp	2011-06-24 17:03:28.000000000 +0800
++++ hbase-0.90.2-local/hbase-webapps/master/showgroup.jsp	2011-06-29 15:50:23.000000000 +0800
 @@ -0,0 +1,217 @@
 +<%@ page language="java" import="java.util.*" import="java.io.*"
 +	import="org.apache.hadoop.hbase.master.HMaster"
@@ -928,8 +937,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/showgroup.jsp hbase-0.90.2-local/hba
 +	import="org.apache.hadoop.hbase.HRegionInfo"
 +	import="org.apache.hadoop.hbase.HServerAddress"
 +	import="org.apache.hadoop.hbase.HServerInfo"
-+	import="org.apache.hadoop.hbase.group.ServerWithGroup"
-+	import="org.apache.hadoop.hbase.group.MoveGroupPlan"
++	import="org.apache.hadoop.hbase.allocation.group.ServerWithGroup"
++	import="org.apache.hadoop.hbase.allocation.group.MoveGroupPlan"
 +	contentType="text/html; charset=GB18030" pageEncoding="GB18030"%>
 +<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 +<html>
@@ -1140,18 +1149,6 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/showgroup.jsp hbase-0.90.2-local/hba
 +</body>
 +</html>
 \ No newline at end of file
-diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/HBaseConfiguration.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/HBaseConfiguration.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/HBaseConfiguration.java	2011-03-28 04:50:35.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/HBaseConfiguration.java	2011-06-28 09:50:35.000000000 +0800
-@@ -66,7 +66,7 @@
-       throw new RuntimeException(
-         "hbase-default.xml file seems to be for and old version of HBase (" +
-         defaultsVersion + "), this version is " + thisVersion);
--    }
-+   }
-   }
- 
-   private static void checkForClusterFreeMemoryLimit(Configuration conf) {
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java	1970-01-01 08:00:00.000000000 +0800
 +++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java	2011-06-28 10:00:53.000000000 +0800
@@ -1399,8 +1396,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMet
 \ No newline at end of file
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	2011-06-28 10:23:25.000000000 +0800
-@@ -0,0 +1,448 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	2011-06-29 17:23:37.000000000 +0800
+@@ -0,0 +1,449 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
 + *
@@ -1794,7 +1791,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/Schedule
 +	 */
 +	public static void main(String args[]) {
 +		final Random r = new Random();
-+		final ScheduleQueue<String> queue = new ScheduleQueue(100, 10);
++		final ScheduleQueue<String> queue = new ScheduleQueue<String>(100, 10);
 +		Thread tt[] = new Thread[50];
 +		int pri = 1;
 +		for (int i = 0; i < tt.length; i++, pri++) {
@@ -1825,6 +1822,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/Schedule
 +		Thread tt2[] = new Thread[10];
 +		for (int i = 0; i < tt2.length; i++) {
 +			tt2[i] = new Thread(i + "") {
++				@SuppressWarnings("static-access")
 +				public void run() {
 +					for (int i = 0; i < 10000000; i++) {
 +						System.out.println("add ten jobs...............");
@@ -1849,592 +1847,202 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/Schedule
 +	}
 +
 +}
-diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java	2011-06-28 10:00:41.000000000 +0800
-@@ -0,0 +1,213 @@
-+package org.apache.hadoop.hbase.allocation.test;
-+
-+
+diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java
+--- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java	1970-01-01 08:00:00.000000000 +0800
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java	2011-06-29 17:12:36.000000000 +0800
+@@ -0,0 +1,189 @@
++/**
++ * Copyright 2010 The Apache Software Foundation
++ *
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.allocation.group;
 +
 +import java.io.IOException;
-+import java.util.ArrayList;
-+import java.util.Collection;
-+import java.util.HashMap;
-+import java.util.HashSet;
-+import java.util.List;
-+import java.util.Map;
 +
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
 +import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.Abortable;
 +import org.apache.hadoop.hbase.HBaseConfiguration;
-+import org.apache.hadoop.hbase.HColumnDescriptor;
-+import org.apache.hadoop.hbase.HRegionInfo;
-+import org.apache.hadoop.hbase.HServerAddress;
-+import org.apache.hadoop.hbase.HServerInfo;
-+import org.apache.hadoop.hbase.allocation.CheckMeta;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.MasterNotRunningException;
++import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 +import org.apache.hadoop.hbase.client.HBaseAdmin;
-+import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.master.GroupAssignmentManager;
 +import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
++import org.apache.zookeeper.KeeperException;
 +
-+
-+public class BalanceRegionByTable {
-+	static final Configuration conf = HBaseConfiguration.create();
-+	public static String table = "testPri";
-+ 
-+
-+
-+	public static void main(String args[]) {
-+		try {
-+			while(true)
-+			{
-+					balanceRegion(true);
-+			}
-+		} catch (IOException e) {
-+			// TODO Auto-generated catch block
-+			e.printStackTrace();
-+		}
++/**
++ * Class user for auto balance all tables in hbase start with hbase
++ * 
++ */
++public class AutoBalance {
++	private static Log LOG = LogFactory.getLog(AutoBalance.class);
++	private long period ; 
++	/**
++	 * Construct method
++	 * @param period  , auto balance period , ms
++	 */
++	public AutoBalance( long period) {
++		super();
++		this.period = period;
 +	}
-+
-+	public static void balanceRegion(boolean auto) throws IOException {
-+		String regionPre="23";
-+		HBaseAdmin admin = new HBaseAdmin(conf);
-+		Collection<HServerInfo> serverInfo = admin.getClusterStatus()
-+				.getServerInfo();
-+		HashSet<String> regionPreList=new HashSet();
-+		HashMap<HServerAddress, String> serverCode = new HashMap<HServerAddress, String>();
-+
-+		for (HServerInfo hinfo : serverInfo) {
-+			if (!serverCode.containsKey(hinfo)) {
-+				serverCode.put(
-+						hinfo.getServerAddress(),
-+						hinfo.getHostnamePort().replace(":", ",") + ","
-+								+ hinfo.getStartCode());
-+				// Map<HServerAddress,String>
++	/**
++	 * Start balance
++	 */
++	public void startBalance(){
++		Thread balancethread = new Thread(new Balance(period));
++		balancethread.start();
++	}
++	/**
++	 * Inner Class for balance all table
++	 * 
++	 */
++	class Balance implements Runnable ,Abortable{
++		private long period;
++		private ZooKeeperWatcher zkw ;
++		Configuration conf = HBaseConfiguration.create();
++		public Balance(long period) {
++			this.period = period;
++			try {
++				zkw = new ZooKeeperWatcher(conf, "BalanceTracker", (Abortable) this);
++				LOG.info("init a new zookeeper watcher !");
++			} catch (ZooKeeperConnectionException e) {
++				e.printStackTrace();
++			} catch (IOException e) {
++				e.printStackTrace();
++			} 
++		}
++		/**
++		 * Check if cluster is running 
++		 * <p>
++		 * if cluster is running ,then read all table from zookeeper , then balance them
++		 */
++		public synchronized void run() {
++			while(!checkClusterIsRunning()){
++				try {
++					Thread.sleep(1000);
++				} catch (InterruptedException e) {
++					e.printStackTrace();
++				}
++			}
++			while (true) {
++				// auto balance all table
++				try {
++					LOG.info("Before Balance table...");
++					balanceAllTable();
++					LOG.info("After Balance table...");
++				} catch (KeeperException e) {
++					e.printStackTrace();
++				} catch (InterruptedException e) {
++					e.printStackTrace();
++				}
++				try {
++					LOG.info("Before Balance sleep...");
++					int numbers = (int) (period/1000)+1;
++					for (int i = 0; i< numbers; i++){
++						// check if cluster  is down
++						Thread.sleep(1000);
++						boolean status = checkClusterIsRunning();
++						if (!status) break;
++					}
++					LOG.info("After  Balance sleep...");
++				} catch (InterruptedException e) {
++					e.printStackTrace();
++				}
 +			}
 +		}
-+		HTable ret = new HTable(conf, table);
 +		
-+		Map<HRegionInfo, HServerAddress> info = null;
-+		HashMap<HServerAddress, List<HRegionInfo>> serverR ;
-+		int div = 99999;
-+		
-+		int maxLoadN = 0;
-+		int minLoadN = 9999999;
-+		int flag=1;
-+		while (true) {
++		private void balanceAllTable() throws KeeperException, InterruptedException {
++			HBaseAdmin admin = null;
 +			try {
-+				//ret.close();
-+				//ret = new HTable(conf, table);
-+				
-+				div = 99999;
-+				
-+				maxLoadN = 0;
-+				minLoadN = 9999999;
-+				serverInfo = admin.getClusterStatus()
-+				.getServerInfo();
-+				
-+				serverCode = new HashMap<HServerAddress, String>();
-+				
-+				for (HServerInfo hinfo : serverInfo) {
-+					if (!serverCode.containsKey(hinfo)) {
-+						serverCode.put(
-+								hinfo.getServerAddress(),
-+								hinfo.getHostnamePort().replace(":", ",") + ","
-+										+ hinfo.getStartCode());
-+						// Map<HServerAddress,String>
-+					}
-+				}
-+				
-+				try {
-+					info = CheckMeta.getRegionAddress(ret.getTableDescriptor().getNameAsString());
-+					//info = ret.getRegionsInfo();
-+				} catch (Exception e) {
-+					// TODO Auto-generated catch block
-+					try {
-+						Thread.currentThread().sleep(1000);
-+					} catch (InterruptedException e1) {
-+						// TODO Auto-generated catch block
-+						e1.printStackTrace();
-+					}
-+					continue;
-+					//e.printStackTrace();
-+				}
-+				
-+				
-+				
-+				serverR = new HashMap<HServerAddress, List<HRegionInfo>>();
-+				for (HServerInfo hinfo : serverInfo) {
-+					serverR.put(hinfo.getServerAddress(), new ArrayList<HRegionInfo>());
-+				
-+				}
-+
-+				for (HRegionInfo rinfo : info.keySet()) {
-+					if(Bytes.toString(rinfo.getStartKey()).length()<3)
-+						continue;
-+					if(!regionPreList.contains(Bytes.toString(rinfo.getStartKey()).subSequence(0, 3)))
-+					{
-+							regionPreList.add((String) Bytes.toString(rinfo.getStartKey()).subSequence(0, 3));
-+					}
-+				}
-+				flag++;
-+				if(flag>=regionPreList.size())
-+				{
-+					flag=0;
-+				}
-+				String []pres=new String[regionPreList.size()];
-+				if(pres.length==0)
-+				{
-+					Thread.currentThread().sleep(20000);
-+					continue;
-+				}
-+				regionPreList.toArray(pres);
-+				
-+				regionPre=pres[flag];
-+		
-+				for (HRegionInfo rinfo : info.keySet()) {
-+					if (serverR.get(info.get(rinfo)) == null) {
-+							serverR.put(info.get(rinfo), new ArrayList<HRegionInfo>());
-+
-+					}
-+					
-+					serverR.get(info.get(rinfo)).add(rinfo);
-+						//serverR.put(info.get(rinfo), new ArrayList<HRegionInfo>());
-+				
-+					//serverR.get(info.get(rinfo)).add(rinfo);
-+				}
-+				HServerAddress maxLoad = null;
-+				HServerAddress minLoad = null;
-+
-+				for (HServerAddress add : serverR.keySet()) {
-+					if (serverR.get(add).size() > maxLoadN) {
-+						maxLoadN = serverR.get(add).size();
-+						maxLoad = add;
-+					}
-+					if (serverR.get(add).size() < minLoadN) {
-+						minLoadN = serverR.get(add).size();
-+						minLoad = add;
-+					}
-+				}
-+				div = maxLoadN - minLoadN;
-+				System.out.println("max load:" + maxLoad.getHostname() + " maxN:"
-+						+ maxLoadN);
-+				System.out.println("min load:" + minLoad.getHostname() + " minN:"
-+						+ minLoadN);
-+				if(div<2)
-+				{
-+					try {
-+						Thread.currentThread().sleep(1000);
-+					} catch (InterruptedException e) {
-+						// TODO Auto-generated catch block
-+						e.printStackTrace();
-+					}
-+					continue;
-+				}
-+				
-+
-+				HRegionInfo rtom = serverR.get(maxLoad).get(serverR.get(maxLoad).size()-1);
-+				serverR.get(maxLoad).remove(0);
-+				serverR.get(minLoad).add(rtom);
-+				byte[] rn = rtom.getEncodedNameAsBytes();
-+				// byte[] sern=maxLoad.;
-+				// admin.move(null, null);
-+				if (!auto) {
-+					System.out.println("move  region ? : [Yes|No]");
-+					java.util.Scanner scanner = new java.util.Scanner(System.in);
-+					String sret = scanner.nextLine();
-+					if (!sret.equals("Yes")) {
-+						System.out.println("Your anwser is not Yes,now exit.");
-+						System.exit(0);
-+					}
-+				}
-+				try {
-+					System.out.println("move " + rtom);
-+					System.out.println("move to " + serverCode.get(minLoad));
-+					Thread.currentThread().sleep(1000);
-+					admin.move(rtom.getEncodedNameAsBytes(),
-+							Bytes.toBytes(serverCode.get(minLoad)));
-+				
-+				} catch (Exception e) {
-+					// TODO Auto-generated catch block
-+					//e.printStackTrace();
-+				}
-+			} catch (Exception e) {
-+				// TODO Auto-generated catch block
++				admin = new HBaseAdmin(conf);
++			} catch (MasterNotRunningException e) {
++				e.printStackTrace();
++				return;
++			} catch (ZooKeeperConnectionException e) {
++				e.printStackTrace();
++				return;
++			}
++			HTableDescriptor[] tablelist = null;
++			try {
++				tablelist = admin.listTables();
++			} catch (IOException e) {
 +				e.printStackTrace();
 +			}
-+		}
-+
-+	}
-+}
-diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java	2011-06-28 10:01:13.000000000 +0800
-@@ -0,0 +1,105 @@
-+package org.apache.hadoop.hbase.allocation.test;
-+
-+import java.io.BufferedInputStream;
-+import java.io.File;
-+import java.io.FileInputStream;
-+import java.io.FileOutputStream;
-+import java.io.IOException;
-+import java.io.InputStream;
-+import java.io.OutputStream;
-+import java.util.ArrayList;
-+import java.util.HashMap;
-+import java.util.List;
-+import java.util.TreeSet;
-+import java.util.Map.Entry;
-+
-+import org.apache.hadoop.conf.Configuration;
-+import org.apache.hadoop.fs.FileSystem;
-+import org.apache.hadoop.fs.Path;
-+import org.apache.hadoop.hbase.HBaseConfiguration;
-+import org.apache.hadoop.hbase.HConstants;
-+import org.apache.hadoop.hbase.HRegionInfo;
-+import org.apache.hadoop.hbase.HServerAddress;
-+import org.apache.hadoop.hbase.HServerInfo;
-+import org.apache.hadoop.hbase.HTableDescriptor;
-+import org.apache.hadoop.hbase.MasterNotRunningException;
-+import org.apache.hadoop.hbase.ZooKeeperConnectionException;
-+import org.apache.hadoop.hbase.allocation.CheckMeta;
-+import org.apache.hadoop.hbase.client.HBaseAdmin;
-+import org.apache.hadoop.hbase.client.HTable;
-+import org.apache.hadoop.hbase.client.MetaScanner;
-+import org.apache.hadoop.hbase.client.Result;
-+import org.apache.hadoop.hbase.client.MetaScanner.MetaScannerVisitor;
-+import org.apache.hadoop.hbase.util.Bytes;
-+import org.apache.hadoop.hbase.util.FSUtils;
-+import org.apache.hadoop.hbase.util.Writables;
-+import org.apache.hadoop.io.IOUtils;
-+
-+
-+public class GroupTest {
-+	private static HTableDescriptor[] listTables() throws IOException {
-+		final TreeSet<HTableDescriptor> uniqueTables = new TreeSet<HTableDescriptor>();
-+		MetaScannerVisitor visitor = new MetaScannerVisitor() {
-+			public boolean processRow(Result result) throws IOException {
-+				try {
-+					byte[] value = result.getValue(HConstants.CATALOG_FAMILY,
-+							HConstants.REGIONINFO_QUALIFIER);
-+					HRegionInfo info = null;
-+					if (value != null) {
-+						info = Writables.getHRegionInfo(value);
++			LOG.info("Get all table from client ,and table size is "+tablelist.length);
++			for (HTableDescriptor tabledesc : tablelist){
++				String table = tabledesc.getNameAsString();
++				LOG.info("table name is :"+table);
++				boolean isprocess = ServerWithGroup.isIsprocess();
++				System.out.println("Is  Processing ? " + isprocess);
++				if (!isprocess){
++					LOG.info("Ready to balance table "+ table);
++					synchronized (ServerWithGroup.class) {
++						ServerWithGroup.setIsprocess(true);
++						ServerWithGroup.setIsbalance(true);
 +					}
-+					// Only examine the rows where the startKey is zero length
-+					if (info != null && info.getStartKey().length == 0) {
-+						uniqueTables.add(info.getTableDesc());
++					synchronized (GroupAssignmentManager.class) {
++						GroupAssignmentManager.balanceTable(table);
 +					}
-+					return true;
-+				} catch (RuntimeException e) {
-+					throw e;
++					synchronized (ServerWithGroup.class) {
++						ServerWithGroup.setIsprocess(false);
++						ServerWithGroup.setIsbalance(false);
++					}
++				LOG.info("After balance table "+ table);
 +				}
 +			}
-+		};
-+		MetaScanner.metaScan(HBaseConfiguration.create(), visitor);
-+
-+		return uniqueTables.toArray(new HTableDescriptor[uniqueTables.size()]);
-+	}
-+	final static Configuration c = HBaseConfiguration.create();
-+	public static void main(String args[]) throws IOException {
-+		Configuration c = HBaseConfiguration.create();
-+		HBaseAdmin d = new HBaseAdmin(c);
-+		// d.disableTable("testPri");
-+		// d.deleteTable("testPri");
-+		HServerInfo s = null;
-+		for (HServerInfo server : d.getClusterStatus().getServerInfo()) {
-+			s = server;
-+			System.out.println(server);
-+		}
-+		HTableDescriptor[] tables = listTables();
-+		for (HTableDescriptor des : tables) {
-+			
-+				HashMap<HRegionInfo, HServerAddress> map = CheckMeta
-+						.getRegionAddress(des.getNameAsString());
-+				for (Entry<HRegionInfo, HServerAddress> e : map.entrySet())
-+					System.out.println(e.getKey().getRegionNameAsString()+ ":"
-+							+ e.getValue());
-+		}
-+		String conffile = "/home/liujia_l.pt/test.group";
-+		FileOutputStream fwriter = new FileOutputStream(new File(conffile));
-+		String ss = "0;dw79.kgb.sqa.cm4,60027;:1;dw79.kgb.sqa.cm4,60033;dw79.kgb.sqa.cm4,60024:";
-+		fwriter.write(Bytes.toBytes(ss));
-+		fwriter.close();
-+		File localfile = new File(conffile);
-+		FileSystem fs = FileSystem.get(c);
-+
-+		long localsize = localfile.length();
-+		Path p=new Path(FSUtils.getRootDir(c)+ "groupinformation.conf");
-+		Path inputpath= new Path("/disk1/hbasedata2/groupinformation.conf");
-+		if (localsize > 0) {
-+			InputStream inst = new BufferedInputStream(new FileInputStream(
-+					conffile));		
-+			OutputStream outst = fs.create(inputpath);
-+			IOUtils.copyBytes(inst, outst, (int) localsize, true);
 +		}
 +
-+	}
-+
-+}
-diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java	2011-06-24 15:05:52.000000000 +0800
-@@ -0,0 +1,253 @@
-+package org.apache.hadoop.hbase.allocation.test;
-+
-+import java.io.IOException;
-+import java.util.ArrayList;
-+import java.util.List;
-+import java.util.Random;
-+
-+import org.apache.hadoop.conf.Configuration;
-+import org.apache.hadoop.hbase.HBaseConfiguration;
-+import org.apache.hadoop.hbase.HColumnDescriptor;
-+import org.apache.hadoop.hbase.HTableDescriptor;
-+import org.apache.hadoop.hbase.MasterNotRunningException;
-+import org.apache.hadoop.hbase.ZooKeeperConnectionException;
-+import org.apache.hadoop.hbase.client.HBaseAdmin;
-+import org.apache.hadoop.hbase.client.HTable;
-+import org.apache.hadoop.hbase.client.Put;
-+import org.apache.hadoop.hbase.client.Result;
-+import org.apache.hadoop.hbase.client.ResultScanner;
-+import org.apache.hadoop.hbase.client.Scan;
-+import org.apache.hadoop.hbase.util.Bytes;
-+/**
-+ * Test for priority server
-+ * @author liujia_l.pt
-+ *
-+ */
-+public class TestForSchedule {
-+	static final Configuration conf=HBaseConfiguration.create();
-+	static final Random r=new Random();
-+	public static void main(String args[])
-+	{
-+		HBaseAdmin admin = null;
-+		try {
-+			admin = new HBaseAdmin(conf);
-+		} catch (MasterNotRunningException e2) {
-+			e2.printStackTrace();
-+		} catch (ZooKeeperConnectionException e2) {
-+			// TODO Auto-generated catch block
-+			e2.printStackTrace();
-+		}
-+		HTableDescriptor des;
-+	try{
-+			//HBaseAdmin admin=new HBaseAdmin(conf);
-+			des=new HTableDescriptor ("testPri8");
-+			des.addFamily(new HColumnDescriptor ("ff"));
-+			des.setValue(Bytes.toBytes("priority"), Bytes.toBytes(1+""));
-+			admin.createTable(des);
-+	} catch (MasterNotRunningException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	} catch (ZooKeeperConnectionException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	} catch (IOException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	}
-+	try{
-+			des=new HTableDescriptor ("testPri7");
-+			des.addFamily(new HColumnDescriptor ("ff"));
-+			des.setValue(Bytes.toBytes("priority"), Bytes.toBytes(5+""));
-+			admin.createTable(des);
-+	} catch (MasterNotRunningException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	} catch (ZooKeeperConnectionException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	} catch (IOException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	}
-+	try
-+	{
-+			des=new HTableDescriptor ("testPri6");
-+			des.addFamily(new HColumnDescriptor ("ff"));
-+			des.setValue(Bytes.toBytes("priority"), Bytes.toBytes(10+""));
-+			admin.createTable(des);
-+			//HTable t=new HTable("");
-+	
-+	} catch (MasterNotRunningException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	} catch (ZooKeeperConnectionException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	} catch (IOException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	}try{
-+			des=new HTableDescriptor ("testPri5");
-+			des.addFamily(new HColumnDescriptor ("ff"));
-+			des.setValue(Bytes.toBytes("priority"), Bytes.toBytes(20+""));
-+			admin.createTable(des);
-+	} catch (MasterNotRunningException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	} catch (ZooKeeperConnectionException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	} catch (IOException e) {
-+		// TODO Auto-generated catch block
-+		e.printStackTrace();
-+	}
-+		
-+		for(int i=0;i<10;i++)
-+		{
-+		
-+			new Thread()
-+			{
-+				public void run()
-+				{
-+					HTable t = null;
-+					try {
-+						t = new HTable(conf,"testPri8");
-+						t.setAutoFlush(false);
-+						t.setWriteBufferSize(1024*1024);
-+					} catch (IOException e) {
-+						// TODO Auto-generated catch block
-+						e.printStackTrace();
-+					}
-+					try {
-+						TestForSchedule.testT(t);
-+					} catch (IOException e) {
-+						// TODO Auto-generated catch block
-+						e.printStackTrace();
-+					}
-+				}
-+			}.start();
-+		
-+			new Thread()
-+			{
-+				public void run()
-+				{
-+					HTable t = null;
-+					try {
-+						t = new HTable(conf,"testPri7");
-+						t.setAutoFlush(false);
-+						t.setWriteBufferSize(1024*1024);
-+					} catch (IOException e) {
-+						// TODO Auto-generated catch block
-+						e.printStackTrace();
-+					}
-+	
-+					try {
-+						TestForSchedule.testT(t);
-+					} catch (IOException e) {
-+						// TODO Auto-generated catch block
-+						e.printStackTrace();
-+					}
-+
-+				}
-+			}.start();
-+			
-+			new Thread()
-+			{
-+				public void run()
-+				{
-+					HTable t = null;
-+					try {
-+						t = new HTable(conf,"testPri6");
-+						t.setAutoFlush(false);
-+						t.setWriteBufferSize(1024*1024);
-+					} catch (IOException e) {
-+						// TODO Auto-generated catch block
-+						e.printStackTrace();
-+					}
-+					try {
-+						TestForSchedule.testT(t);
-+					} catch (IOException e) {
-+						// TODO Auto-generated catch block
-+						e.printStackTrace();
-+					}
-+					
-+				}
-+			}.start();
-+			new Thread()
-+			{
-+				public void run()
-+				{
-+					HTable t = null;
-+					try {
-+						t = new HTable(conf,"testPri5");		t.setAutoFlush(false);
-+						t.setWriteBufferSize(1024*1024);
-+					} catch (IOException e) {
-+						// TODO Auto-generated catch block
-+						e.printStackTrace();
-+					}
-+					try {
-+						TestForSchedule.testT(t);
-+					} catch (IOException e) {
-+						// TODO Auto-generated catch block
-+						e.printStackTrace();
-+					}
-+				}
-+			}.start();
-+		}
-+			
-+	
-+	}
-+	public static void putTest(HTable t,int i)
-+	{
-+		Put p=new Put(Bytes.toBytes(""+r.nextInt(1000000000)+(i)+r.nextInt(1000000000)));
-+		
-+		p.add(Bytes.toBytes("ff"), Bytes.toBytes("ff"), Bytes.toBytes("ff"+i+r.nextInt(1000000000)+r.nextInt(1000000000)+"fffffffffffffffffffffffffffffffffffffffffffffffffffff"+i));
-+		try {
-+			t.put(p);
-+		} catch (IOException e1) {
-+			// TODO Auto-generated catch block
-+			e1.printStackTrace();
-+		}
-+	}
-+	public static Result scanTest(ResultScanner sn)
-+	
-+	{
-+		try {
-+			return sn.next();
-+		} catch (IOException e) {
-+			// TODO Auto-generated catch block
-+			e.printStackTrace();
-+		}
-+		return null;
-+
-+	}
-+	static int inter=0;
-+	public static void  testT(HTable t) throws IOException
-+	{
-+		int i=0;
-+		long start=System.currentTimeMillis();
-+		long end =System.currentTimeMillis();
-+		int pri=
-+			Integer.parseInt(Bytes.toString(t.getTableDescriptor().getValue(Bytes.toBytes("priority"))));
-+		Scan s=new Scan();
-+		s.setStartRow(Bytes.toBytes(r.nextInt(10)));
-+		t.setScannerCaching(1000);
-+		t.setAutoFlush(false);
-+		t.setWriteBufferSize(1000*6000);
-+		ResultScanner sn=t.getScanner(s);
-+		while(true)
-+		{
-+			if(i%10000==0)
-+			{
-+				end=System.currentTimeMillis();
-+				System.out.println("table"+t.getTableDescriptor().getNameAsString()+" pri :"+pri+" time:"+ (end-start));
-+				start=end;
++		private boolean checkClusterIsRunning(){
++			String clusterStateZNode =  zkw.clusterStateZNode;
++			byte[] data;
++			try {
++				data = zkw.getZooKeeper().getData(clusterStateZNode, false, null);
++			} catch (KeeperException e) {
++				LOG.debug("when get clusterstate form zookeeper "+e.getMessage());
++				return false;
++			} catch (InterruptedException e) {
++				LOG.debug("when get clusterstate form zookeeper "+e.getMessage());
++				return false;
 +			}
-+			//scanTest(sn);
-+			putTest(t,i);
-+			i++;
-+
++			LOG.debug("data is "+Bytes.toString(data));
++			if (data!= null){
++				return true;
++			}else {
++				return false;
++			}
++		}
++		@Override
++		public void abort(String arg0, Throwable arg1) {
++			LOG.info("Get exceptuion when auto balance , abort.......");
 +		}
 +	}
-+
++	
++	public static void main(String[] args){
++		AutoBalance autobalance = new AutoBalance(100000);
++		autobalance.startBalance();
++	}
 +}
-diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/MoveConfImpl.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/group/MoveConfImpl.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/MoveConfImpl.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/group/MoveConfImpl.java	2011-06-28 14:59:54.000000000 +0800
+diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java
+--- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java	1970-01-01 08:00:00.000000000 +0800
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java	2011-06-29 15:09:23.000000000 +0800
 @@ -0,0 +1,141 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -2455,7 +2063,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/MoveConfImpl.
 + * See the License for the specific language governing permissions and
 + * limitations under the License.
 + */
-+package org.apache.hadoop.hbase.group;
++package org.apache.hadoop.hbase.allocation.group;
 +
 +import java.io.File;
 +import java.io.IOException;
@@ -2577,9 +2185,9 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/MoveConfImpl.
 +		return true;
 +	}
 +}
-diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/MoveGroupPlan.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/group/MoveGroupPlan.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/MoveGroupPlan.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/group/MoveGroupPlan.java	2011-06-28 15:11:05.000000000 +0800
+diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java
+--- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java	1970-01-01 08:00:00.000000000 +0800
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java	2011-06-29 15:08:25.000000000 +0800
 @@ -0,0 +1,104 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -2600,7 +2208,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/MoveGroupPlan
 + * See the License for the specific language governing permissions and
 + * limitations under the License.
 + */
-+package org.apache.hadoop.hbase.group;
++package org.apache.hadoop.hbase.allocation.group;
 +
 +/**
 + * Used for change regionserver groups
@@ -2685,9 +2293,9 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/MoveGroupPlan
 +		this.status = status;
 +	}
 +}
-diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/ProcessMove.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/group/ProcessMove.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/ProcessMove.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/group/ProcessMove.java	2011-06-28 15:10:39.000000000 +0800
+diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java
+--- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java	1970-01-01 08:00:00.000000000 +0800
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java	2011-06-29 15:13:12.000000000 +0800
 @@ -0,0 +1,290 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -2708,7 +2316,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/ProcessMove.j
 + * See the License for the specific language governing permissions and
 + * limitations under the License.
 + */
-+package org.apache.hadoop.hbase.group;
++package org.apache.hadoop.hbase.allocation.group;
 +
 +import java.io.IOException;
 +import java.util.ArrayList;
@@ -2979,9 +2587,9 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/ProcessMove.j
 +	}
 +
 +}
-diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/ServerWithGroup.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/group/ServerWithGroup.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/ServerWithGroup.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/group/ServerWithGroup.java	2011-06-28 15:31:25.000000000 +0800
+diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java
+--- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java	1970-01-01 08:00:00.000000000 +0800
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java	2011-06-29 15:10:01.000000000 +0800
 @@ -0,0 +1,675 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -3002,7 +2610,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/ServerWithGro
 + * See the License for the specific language governing permissions and
 + * limitations under the License.
 + */
-+package org.apache.hadoop.hbase.group;
++package org.apache.hadoop.hbase.allocation.group;
 +
 +import java.io.IOException;
 +import java.net.URI;
@@ -3659,10 +3267,593 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/group/ServerWithGro
 +	}
 +}
 \ No newline at end of file
+diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java
+--- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java	1970-01-01 08:00:00.000000000 +0800
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java	2011-06-28 10:00:41.000000000 +0800
+@@ -0,0 +1,213 @@
++package org.apache.hadoop.hbase.allocation.test;
++
++
++
++import java.io.IOException;
++import java.util.ArrayList;
++import java.util.Collection;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Map;
++
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.HBaseConfiguration;
++import org.apache.hadoop.hbase.HColumnDescriptor;
++import org.apache.hadoop.hbase.HRegionInfo;
++import org.apache.hadoop.hbase.HServerAddress;
++import org.apache.hadoop.hbase.HServerInfo;
++import org.apache.hadoop.hbase.allocation.CheckMeta;
++import org.apache.hadoop.hbase.client.HBaseAdmin;
++import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.util.Bytes;
++
++
++public class BalanceRegionByTable {
++	static final Configuration conf = HBaseConfiguration.create();
++	public static String table = "testPri";
++ 
++
++
++	public static void main(String args[]) {
++		try {
++			while(true)
++			{
++					balanceRegion(true);
++			}
++		} catch (IOException e) {
++			// TODO Auto-generated catch block
++			e.printStackTrace();
++		}
++	}
++
++	public static void balanceRegion(boolean auto) throws IOException {
++		String regionPre="23";
++		HBaseAdmin admin = new HBaseAdmin(conf);
++		Collection<HServerInfo> serverInfo = admin.getClusterStatus()
++				.getServerInfo();
++		HashSet<String> regionPreList=new HashSet();
++		HashMap<HServerAddress, String> serverCode = new HashMap<HServerAddress, String>();
++
++		for (HServerInfo hinfo : serverInfo) {
++			if (!serverCode.containsKey(hinfo)) {
++				serverCode.put(
++						hinfo.getServerAddress(),
++						hinfo.getHostnamePort().replace(":", ",") + ","
++								+ hinfo.getStartCode());
++				// Map<HServerAddress,String>
++			}
++		}
++		HTable ret = new HTable(conf, table);
++		
++		Map<HRegionInfo, HServerAddress> info = null;
++		HashMap<HServerAddress, List<HRegionInfo>> serverR ;
++		int div = 99999;
++		
++		int maxLoadN = 0;
++		int minLoadN = 9999999;
++		int flag=1;
++		while (true) {
++			try {
++				//ret.close();
++				//ret = new HTable(conf, table);
++				
++				div = 99999;
++				
++				maxLoadN = 0;
++				minLoadN = 9999999;
++				serverInfo = admin.getClusterStatus()
++				.getServerInfo();
++				
++				serverCode = new HashMap<HServerAddress, String>();
++				
++				for (HServerInfo hinfo : serverInfo) {
++					if (!serverCode.containsKey(hinfo)) {
++						serverCode.put(
++								hinfo.getServerAddress(),
++								hinfo.getHostnamePort().replace(":", ",") + ","
++										+ hinfo.getStartCode());
++						// Map<HServerAddress,String>
++					}
++				}
++				
++				try {
++					info = CheckMeta.getRegionAddress(ret.getTableDescriptor().getNameAsString());
++					//info = ret.getRegionsInfo();
++				} catch (Exception e) {
++					// TODO Auto-generated catch block
++					try {
++						Thread.currentThread().sleep(1000);
++					} catch (InterruptedException e1) {
++						// TODO Auto-generated catch block
++						e1.printStackTrace();
++					}
++					continue;
++					//e.printStackTrace();
++				}
++				
++				
++				
++				serverR = new HashMap<HServerAddress, List<HRegionInfo>>();
++				for (HServerInfo hinfo : serverInfo) {
++					serverR.put(hinfo.getServerAddress(), new ArrayList<HRegionInfo>());
++				
++				}
++
++				for (HRegionInfo rinfo : info.keySet()) {
++					if(Bytes.toString(rinfo.getStartKey()).length()<3)
++						continue;
++					if(!regionPreList.contains(Bytes.toString(rinfo.getStartKey()).subSequence(0, 3)))
++					{
++							regionPreList.add((String) Bytes.toString(rinfo.getStartKey()).subSequence(0, 3));
++					}
++				}
++				flag++;
++				if(flag>=regionPreList.size())
++				{
++					flag=0;
++				}
++				String []pres=new String[regionPreList.size()];
++				if(pres.length==0)
++				{
++					Thread.currentThread().sleep(20000);
++					continue;
++				}
++				regionPreList.toArray(pres);
++				
++				regionPre=pres[flag];
++		
++				for (HRegionInfo rinfo : info.keySet()) {
++					if (serverR.get(info.get(rinfo)) == null) {
++							serverR.put(info.get(rinfo), new ArrayList<HRegionInfo>());
++
++					}
++					
++					serverR.get(info.get(rinfo)).add(rinfo);
++						//serverR.put(info.get(rinfo), new ArrayList<HRegionInfo>());
++				
++					//serverR.get(info.get(rinfo)).add(rinfo);
++				}
++				HServerAddress maxLoad = null;
++				HServerAddress minLoad = null;
++
++				for (HServerAddress add : serverR.keySet()) {
++					if (serverR.get(add).size() > maxLoadN) {
++						maxLoadN = serverR.get(add).size();
++						maxLoad = add;
++					}
++					if (serverR.get(add).size() < minLoadN) {
++						minLoadN = serverR.get(add).size();
++						minLoad = add;
++					}
++				}
++				div = maxLoadN - minLoadN;
++				System.out.println("max load:" + maxLoad.getHostname() + " maxN:"
++						+ maxLoadN);
++				System.out.println("min load:" + minLoad.getHostname() + " minN:"
++						+ minLoadN);
++				if(div<2)
++				{
++					try {
++						Thread.currentThread().sleep(1000);
++					} catch (InterruptedException e) {
++						// TODO Auto-generated catch block
++						e.printStackTrace();
++					}
++					continue;
++				}
++				
++
++				HRegionInfo rtom = serverR.get(maxLoad).get(serverR.get(maxLoad).size()-1);
++				serverR.get(maxLoad).remove(0);
++				serverR.get(minLoad).add(rtom);
++				byte[] rn = rtom.getEncodedNameAsBytes();
++				// byte[] sern=maxLoad.;
++				// admin.move(null, null);
++				if (!auto) {
++					System.out.println("move  region ? : [Yes|No]");
++					java.util.Scanner scanner = new java.util.Scanner(System.in);
++					String sret = scanner.nextLine();
++					if (!sret.equals("Yes")) {
++						System.out.println("Your anwser is not Yes,now exit.");
++						System.exit(0);
++					}
++				}
++				try {
++					System.out.println("move " + rtom);
++					System.out.println("move to " + serverCode.get(minLoad));
++					Thread.currentThread().sleep(1000);
++					admin.move(rtom.getEncodedNameAsBytes(),
++							Bytes.toBytes(serverCode.get(minLoad)));
++				
++				} catch (Exception e) {
++					// TODO Auto-generated catch block
++					//e.printStackTrace();
++				}
++			} catch (Exception e) {
++				// TODO Auto-generated catch block
++				e.printStackTrace();
++			}
++		}
++
++	}
++}
+diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java
+--- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java	1970-01-01 08:00:00.000000000 +0800
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java	2011-06-28 10:01:13.000000000 +0800
+@@ -0,0 +1,105 @@
++package org.apache.hadoop.hbase.allocation.test;
++
++import java.io.BufferedInputStream;
++import java.io.File;
++import java.io.FileInputStream;
++import java.io.FileOutputStream;
++import java.io.IOException;
++import java.io.InputStream;
++import java.io.OutputStream;
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.List;
++import java.util.TreeSet;
++import java.util.Map.Entry;
++
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HBaseConfiguration;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.HRegionInfo;
++import org.apache.hadoop.hbase.HServerAddress;
++import org.apache.hadoop.hbase.HServerInfo;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.MasterNotRunningException;
++import org.apache.hadoop.hbase.ZooKeeperConnectionException;
++import org.apache.hadoop.hbase.allocation.CheckMeta;
++import org.apache.hadoop.hbase.client.HBaseAdmin;
++import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.client.MetaScanner;
++import org.apache.hadoop.hbase.client.Result;
++import org.apache.hadoop.hbase.client.MetaScanner.MetaScannerVisitor;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.FSUtils;
++import org.apache.hadoop.hbase.util.Writables;
++import org.apache.hadoop.io.IOUtils;
++
++
++public class GroupTest {
++	private static HTableDescriptor[] listTables() throws IOException {
++		final TreeSet<HTableDescriptor> uniqueTables = new TreeSet<HTableDescriptor>();
++		MetaScannerVisitor visitor = new MetaScannerVisitor() {
++			public boolean processRow(Result result) throws IOException {
++				try {
++					byte[] value = result.getValue(HConstants.CATALOG_FAMILY,
++							HConstants.REGIONINFO_QUALIFIER);
++					HRegionInfo info = null;
++					if (value != null) {
++						info = Writables.getHRegionInfo(value);
++					}
++					// Only examine the rows where the startKey is zero length
++					if (info != null && info.getStartKey().length == 0) {
++						uniqueTables.add(info.getTableDesc());
++					}
++					return true;
++				} catch (RuntimeException e) {
++					throw e;
++				}
++			}
++		};
++		MetaScanner.metaScan(HBaseConfiguration.create(), visitor);
++
++		return uniqueTables.toArray(new HTableDescriptor[uniqueTables.size()]);
++	}
++	final static Configuration c = HBaseConfiguration.create();
++	public static void main(String args[]) throws IOException {
++		Configuration c = HBaseConfiguration.create();
++		HBaseAdmin d = new HBaseAdmin(c);
++		// d.disableTable("testPri");
++		// d.deleteTable("testPri");
++		HServerInfo s = null;
++		for (HServerInfo server : d.getClusterStatus().getServerInfo()) {
++			s = server;
++			System.out.println(server);
++		}
++		HTableDescriptor[] tables = listTables();
++		for (HTableDescriptor des : tables) {
++			
++				HashMap<HRegionInfo, HServerAddress> map = CheckMeta
++						.getRegionAddress(des.getNameAsString());
++				for (Entry<HRegionInfo, HServerAddress> e : map.entrySet())
++					System.out.println(e.getKey().getRegionNameAsString()+ ":"
++							+ e.getValue());
++		}
++		String conffile = "/home/liujia_l.pt/test.group";
++		FileOutputStream fwriter = new FileOutputStream(new File(conffile));
++		String ss = "0;dw79.kgb.sqa.cm4,60027;:1;dw79.kgb.sqa.cm4,60033;dw79.kgb.sqa.cm4,60024:";
++		fwriter.write(Bytes.toBytes(ss));
++		fwriter.close();
++		File localfile = new File(conffile);
++		FileSystem fs = FileSystem.get(c);
++
++		long localsize = localfile.length();
++		Path p=new Path(FSUtils.getRootDir(c)+ "groupinformation.conf");
++		Path inputpath= new Path("/disk1/hbasedata2/groupinformation.conf");
++		if (localsize > 0) {
++			InputStream inst = new BufferedInputStream(new FileInputStream(
++					conffile));		
++			OutputStream outst = fs.create(inputpath);
++			IOUtils.copyBytes(inst, outst, (int) localsize, true);
++		}
++
++	}
++
++}
+diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java
+--- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java	1970-01-01 08:00:00.000000000 +0800
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java	2011-06-24 15:05:52.000000000 +0800
+@@ -0,0 +1,253 @@
++package org.apache.hadoop.hbase.allocation.test;
++
++import java.io.IOException;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Random;
++
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.HBaseConfiguration;
++import org.apache.hadoop.hbase.HColumnDescriptor;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.MasterNotRunningException;
++import org.apache.hadoop.hbase.ZooKeeperConnectionException;
++import org.apache.hadoop.hbase.client.HBaseAdmin;
++import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.client.Put;
++import org.apache.hadoop.hbase.client.Result;
++import org.apache.hadoop.hbase.client.ResultScanner;
++import org.apache.hadoop.hbase.client.Scan;
++import org.apache.hadoop.hbase.util.Bytes;
++/**
++ * Test for priority server
++ * @author liujia_l.pt
++ *
++ */
++public class TestForSchedule {
++	static final Configuration conf=HBaseConfiguration.create();
++	static final Random r=new Random();
++	public static void main(String args[])
++	{
++		HBaseAdmin admin = null;
++		try {
++			admin = new HBaseAdmin(conf);
++		} catch (MasterNotRunningException e2) {
++			e2.printStackTrace();
++		} catch (ZooKeeperConnectionException e2) {
++			// TODO Auto-generated catch block
++			e2.printStackTrace();
++		}
++		HTableDescriptor des;
++	try{
++			//HBaseAdmin admin=new HBaseAdmin(conf);
++			des=new HTableDescriptor ("testPri8");
++			des.addFamily(new HColumnDescriptor ("ff"));
++			des.setValue(Bytes.toBytes("priority"), Bytes.toBytes(1+""));
++			admin.createTable(des);
++	} catch (MasterNotRunningException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	} catch (ZooKeeperConnectionException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	} catch (IOException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	}
++	try{
++			des=new HTableDescriptor ("testPri7");
++			des.addFamily(new HColumnDescriptor ("ff"));
++			des.setValue(Bytes.toBytes("priority"), Bytes.toBytes(5+""));
++			admin.createTable(des);
++	} catch (MasterNotRunningException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	} catch (ZooKeeperConnectionException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	} catch (IOException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	}
++	try
++	{
++			des=new HTableDescriptor ("testPri6");
++			des.addFamily(new HColumnDescriptor ("ff"));
++			des.setValue(Bytes.toBytes("priority"), Bytes.toBytes(10+""));
++			admin.createTable(des);
++			//HTable t=new HTable("");
++	
++	} catch (MasterNotRunningException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	} catch (ZooKeeperConnectionException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	} catch (IOException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	}try{
++			des=new HTableDescriptor ("testPri5");
++			des.addFamily(new HColumnDescriptor ("ff"));
++			des.setValue(Bytes.toBytes("priority"), Bytes.toBytes(20+""));
++			admin.createTable(des);
++	} catch (MasterNotRunningException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	} catch (ZooKeeperConnectionException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	} catch (IOException e) {
++		// TODO Auto-generated catch block
++		e.printStackTrace();
++	}
++		
++		for(int i=0;i<10;i++)
++		{
++		
++			new Thread()
++			{
++				public void run()
++				{
++					HTable t = null;
++					try {
++						t = new HTable(conf,"testPri8");
++						t.setAutoFlush(false);
++						t.setWriteBufferSize(1024*1024);
++					} catch (IOException e) {
++						// TODO Auto-generated catch block
++						e.printStackTrace();
++					}
++					try {
++						TestForSchedule.testT(t);
++					} catch (IOException e) {
++						// TODO Auto-generated catch block
++						e.printStackTrace();
++					}
++				}
++			}.start();
++		
++			new Thread()
++			{
++				public void run()
++				{
++					HTable t = null;
++					try {
++						t = new HTable(conf,"testPri7");
++						t.setAutoFlush(false);
++						t.setWriteBufferSize(1024*1024);
++					} catch (IOException e) {
++						// TODO Auto-generated catch block
++						e.printStackTrace();
++					}
++	
++					try {
++						TestForSchedule.testT(t);
++					} catch (IOException e) {
++						// TODO Auto-generated catch block
++						e.printStackTrace();
++					}
++
++				}
++			}.start();
++			
++			new Thread()
++			{
++				public void run()
++				{
++					HTable t = null;
++					try {
++						t = new HTable(conf,"testPri6");
++						t.setAutoFlush(false);
++						t.setWriteBufferSize(1024*1024);
++					} catch (IOException e) {
++						// TODO Auto-generated catch block
++						e.printStackTrace();
++					}
++					try {
++						TestForSchedule.testT(t);
++					} catch (IOException e) {
++						// TODO Auto-generated catch block
++						e.printStackTrace();
++					}
++					
++				}
++			}.start();
++			new Thread()
++			{
++				public void run()
++				{
++					HTable t = null;
++					try {
++						t = new HTable(conf,"testPri5");		t.setAutoFlush(false);
++						t.setWriteBufferSize(1024*1024);
++					} catch (IOException e) {
++						// TODO Auto-generated catch block
++						e.printStackTrace();
++					}
++					try {
++						TestForSchedule.testT(t);
++					} catch (IOException e) {
++						// TODO Auto-generated catch block
++						e.printStackTrace();
++					}
++				}
++			}.start();
++		}
++			
++	
++	}
++	public static void putTest(HTable t,int i)
++	{
++		Put p=new Put(Bytes.toBytes(""+r.nextInt(1000000000)+(i)+r.nextInt(1000000000)));
++		
++		p.add(Bytes.toBytes("ff"), Bytes.toBytes("ff"), Bytes.toBytes("ff"+i+r.nextInt(1000000000)+r.nextInt(1000000000)+"fffffffffffffffffffffffffffffffffffffffffffffffffffff"+i));
++		try {
++			t.put(p);
++		} catch (IOException e1) {
++			// TODO Auto-generated catch block
++			e1.printStackTrace();
++		}
++	}
++	public static Result scanTest(ResultScanner sn)
++	
++	{
++		try {
++			return sn.next();
++		} catch (IOException e) {
++			// TODO Auto-generated catch block
++			e.printStackTrace();
++		}
++		return null;
++
++	}
++	static int inter=0;
++	public static void  testT(HTable t) throws IOException
++	{
++		int i=0;
++		long start=System.currentTimeMillis();
++		long end =System.currentTimeMillis();
++		int pri=
++			Integer.parseInt(Bytes.toString(t.getTableDescriptor().getValue(Bytes.toBytes("priority"))));
++		Scan s=new Scan();
++		s.setStartRow(Bytes.toBytes(r.nextInt(10)));
++		t.setScannerCaching(1000);
++		t.setAutoFlush(false);
++		t.setWriteBufferSize(1000*6000);
++		ResultScanner sn=t.getScanner(s);
++		while(true)
++		{
++			if(i%10000==0)
++			{
++				end=System.currentTimeMillis();
++				System.out.println("table"+t.getTableDescriptor().getNameAsString()+" pri :"+pri+" time:"+ (end-start));
++				start=end;
++			}
++			//scanTest(sn);
++			putTest(t,i);
++			i++;
++
++		}
++	}
++
++}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	2011-06-28 14:33:23.000000000 +0800
-@@ -0,0 +1,1815 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	2011-06-29 17:27:15.000000000 +0800
+@@ -0,0 +1,1812 @@
 +package org.apache.hadoop.hbase.ipc;
 +
 +/**
@@ -3919,6 +4110,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +	 * @throws IOException
 +	 *             e
 +	 */
++	@SuppressWarnings({ "unchecked"})
 +	public ScheduleHBaseServer(Object instance, final Class<?>[] ifaces,
 +			Configuration conf, String bindAddress, int port, int numHandlers,
 +			int metaHandlerCount, boolean verbose, int highPriorityLevel)
@@ -3938,7 +4130,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +			f.setAccessible(true);
 +			Map<String, InternalScanner> scanMap = (Map<String, InternalScanner>) f
 +			.get(instance);
-+			this.scannersMap = scanMap;
++			scannersMap = scanMap;
 +		} catch (Exception e) {
 +
 +		}
@@ -3957,6 +4149,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +	 * @return the region priority
 +	 */
 +
++	@SuppressWarnings("unused")
 +	private int initRegionPri(byte[] regions, boolean force) {
 +		String region = Bytes.toString(regions);
 +		return this.initRegionPri(region, force);
@@ -3980,38 +4173,37 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +				return ret;
 +		}
 +		Integer prii;
-+		int pri = this.defaultPri;
++		int pri = defaultPri;
 +		HRegion hr = ((HRegionServer) this.instance).getOnlineRegion(Bytes
 +				.toBytes(region));
 +
 +		if (hr != null) {
 +			if (hr.getRegionInfo().isMetaRegion()
 +					|| hr.getRegionInfo().isRootRegion()) {
-+				pri = this.highestPri;
++				pri = highestPri;
 +				System.out.println("int init region" + region + ",pri:" + pri);
-+				this.regionPriMap.put(region, pri);
++				regionPriMap.put(region, pri);
 +				return pri;
 +			}
 +			String tableName = hr.getTableDesc().getNameAsString();
 +
-+			prii = this.tablePriMap.get(tableName);
++			prii = tablePriMap.get(tableName);
 +			if (prii == null) {
 +				if (hr.getTableDesc().getValue(Bytes.toBytes(pri_string)) != null) {
 +					try {
 +						pri = Integer.parseInt(Bytes.toString(hr.getTableDesc()
 +								.getValue(Bytes.toBytes(pri_string))));
 +					} catch (Exception e) {
-+						// TODO Auto-generated catch block
 +						e.printStackTrace();
 +					}
 +				}
-+				this.tablePriMap.put(tableName, pri);
++				tablePriMap.put(tableName, pri);
 +			} else {
 +				pri = prii;
 +			}
 +
 +		}
-+		this.regionPriMap.put(region, pri);
++		regionPriMap.put(region, pri);
 +		return pri;
 +	}
 +
@@ -4023,16 +4215,13 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +	 *            scanner id
 +	 */
 +	public void initScannerPri(Invocation call, Object value) {
-+		int pri = this.defaultPri;
 +		Long id = (Long) value;
 +		byte[] region = (byte[]) call.getParameters()[0];
 +		String regionN = Bytes.toString(region);
 +		Integer prii = regionPriMap.get(regionN);
 +		if (prii == null) {
-+			pri = this.initRegionPri(regionN, false);
-+		} else {
-+			pri = prii;
-+		}
++			this.initRegionPri(regionN, false);
++		} 
 +		scannerPriMap.put(id, regionN);
 +	}
 +
@@ -4101,7 +4290,6 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +
 +					sleep(initInter);
 +				} catch (InterruptedException e) {
-+					// TODO Auto-generated catch block
 +					e.printStackTrace();
 +				}
 +			}
@@ -4125,9 +4313,9 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +		try {
 +			admin = new HBaseAdmin(conf);
 +			handleFreshInter = conf.getInt("hbase.schedule.refreshinter", 7);
-+			this.move = Integer.SIZE - handleFreshInter;
++			move = Integer.SIZE - handleFreshInter;
 +			HTableDescriptor[] tableDs = admin.listTables();
-+			int pri = this.defaultPri;
++			int pri = defaultPri;
 +			for (HTableDescriptor des : tableDs) {
 +				byte[] prib = des.getValue(Bytes.toBytes(pri_string));
 +				if (prib != null) {
@@ -4139,7 +4327,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +								+ des.getNameAsString());
 +					}
 +				}
-+				this.tablePriMap.put(des.getNameAsString(), pri);
++				tablePriMap.put(des.getNameAsString(), pri);
 +			}
 +		} catch (MasterNotRunningException e) {
 +
@@ -4149,15 +4337,15 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +		} catch (IOException e) {
 +			e.printStackTrace();
 +		}
-+		HRegionServer server = ((HRegionServer) this.instance);
++
 +
 +		for (Long id : scannerPriMap.keySet()) {
-+			if (this.scannersMap.get(String.valueOf(id)) == null) {
++			if (scannersMap.get(String.valueOf(id)) == null) {
 +				scannerPriMap.remove(id);
 +			}
 +		}
 +		for (Long id : scannerPriMapInteger.keySet()) {
-+			if (this.scannersMap.get(String.valueOf(id)) == null) {
++			if (scannersMap.get(String.valueOf(id)) == null) {
 +				scannerPriMapInteger.remove(id);
 +			}
 +		}
@@ -5480,8 +5668,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	2011-06-28 11:09:16.000000000 +0800
-@@ -0,0 +1,1539 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	2011-06-29 17:22:55.000000000 +0800
+@@ -0,0 +1,1544 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
 + *
@@ -5533,6 +5721,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +import org.apache.hadoop.hbase.UnknownRegionException;
 +import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 +import org.apache.hadoop.hbase.allocation.CheckMeta;
++import org.apache.hadoop.hbase.allocation.group.AutoBalance;
 +import org.apache.hadoop.hbase.catalog.CatalogTracker;
 +import org.apache.hadoop.hbase.catalog.MetaEditor;
 +import org.apache.hadoop.hbase.catalog.MetaReader;
@@ -5605,12 +5794,21 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	 * group infomation
 +	 */
 +	static {
++		
++		try {
++			long period=conf.getLong("hbase.balancer.period",300000);
++			AutoBalance balancer=new AutoBalance(period);
++			balancer.startBalance();
++		} catch (Exception e1) {
++			LOG.error("start balancer error"+e1.getMessage());
++			e1.printStackTrace();
++		}
 +		Thread refresher = new Thread() {
 +			public void run() {
 +				while (true) {
 +					try {
 +						if (GroupAssignmentManager.master != null
-+								&& GroupAssignmentManager.master.isAlive()) {
++								&& GroupAssignmentManager.master.isAlive()&&!master.isStopped()) {
 +							HTableDescriptor[] dess = GroupAssignmentManager
 +							.initValue();
 +							maintainGroup(dess);
@@ -5697,8 +5895,9 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +	}
 +
++	@SuppressWarnings("unused")
 +	private HServerAddress serveringServer(HRegionInfo info) {
-+		Map<String, HServerInfo> map = this.serverManager.getOnlineServers();
++		Map<String, HServerInfo> map = serverManager.getOnlineServers();
 +		for (HServerInfo server : map.values()) {
 +			try {
 +				if (admin.getConnection().getHRegionConnection(
@@ -6068,10 +6267,11 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	 * @param table
 +	 *            table name
 +	 */
++	@SuppressWarnings("static-access")
 +	public static void setPriority(String priority, String table) {
 +
 +		try {
-+			int pri = Integer.parseInt(priority);
++			Integer.parseInt(priority);
 +		} catch (NumberFormatException e) {
 +			e.printStackTrace();
 +			return;
@@ -6088,13 +6288,11 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +				Thread.currentThread().sleep(3000);
 +				admin.disableTable(table);
 +			} catch (Exception e1) {
-+				// TODO Auto-generated catch block
 +				e1.printStackTrace();
 +			}
 +			try {
 +				Thread.currentThread().sleep(10000);
 +			} catch (InterruptedException e1) {
-+				// TODO Auto-generated catch block
 +				e1.printStackTrace();
 +			}
 +			LOG.info(".....disable finished .............");
@@ -6103,7 +6301,6 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +				admin.modifyTable(des.getName(), des);
 +				LOG.info(".....modify priority finished .............");
 +			} catch (Exception e) {
-+				// TODO Auto-generated catch block
 +				e.printStackTrace();
 +			}
 +			try {
@@ -6131,6 +6328,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	 * @param table
 +	 *            table name
 +	 */
++	@SuppressWarnings("static-access")
 +	public static void setGroup(String[] groups, String table) {
 +
 +		try {
@@ -6149,34 +6347,29 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +				Thread.currentThread().sleep(5000);
 +				admin.disableTable(table);
 +			} catch (Exception e1) {
-+				// TODO Auto-generated catch block
 +				e1.printStackTrace();
 +			}
 +			try {
 +				Thread.currentThread().sleep(10000);
 +			} catch (InterruptedException e1) {
-+				// TODO Auto-generated catch block
 +				e1.printStackTrace();
 +			}
 +			LOG.info("disable table :" + table + "finished");
 +			try {
 +				admin.modifyTable(des.getName(), des);
 +			} catch (Exception e) {
-+				// TODO Auto-generated catch block
 +				e.printStackTrace();
 +			}
 +			try {
 +				Thread.currentThread().sleep(5000);
 +				admin.modifyTable(des.getName(), des);
 +			} catch (InterruptedException e1) {
-+				// TODO Auto-generated catch block
 +				e1.printStackTrace();
 +			}
 +			LOG.info("modify table :" + table + " finished");
 +			try {
 +				GroupAssignmentManager.initValue();
 +			} catch (Exception e) {
-+				// TODO Auto-generated catch block
 +				e.printStackTrace();
 +			}
 +			LOG.info("intivalue  :" + table + " finished");
@@ -6243,12 +6436,12 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			CatalogTracker catalogTracker, ExecutorService service)
 +	throws KeeperException {
 +		super(master, serverManager, catalogTracker, service);
-+		this.master = (HMaster) master;
-+		this.master.getZooKeeper().registerListenerFirst(this);
-+		this.master.balanceSwitch(false);
-+		this.conf = this.master.getConfiguration();
-+		this.serverManager = serverManager;
-+		this.catalogTracker = catalogTracker; 
++		GroupAssignmentManager.master = (HMaster) master;
++		GroupAssignmentManager.master.getZooKeeper().registerListenerFirst(this);
++		GroupAssignmentManager.master.balanceSwitch(false);
++		GroupAssignmentManager.conf = GroupAssignmentManager.master.getConfiguration();
++		GroupAssignmentManager.serverManager = serverManager;
++		GroupAssignmentManager.catalogTracker = catalogTracker; 
 +		try {
 +			Field f = AssignmentManager.class.getDeclaredField("zkTable");
 +			f.setAccessible(true);
@@ -6266,15 +6459,11 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +			e.printStackTrace();
 +		} catch (NoSuchFieldException e) {
-+
 +			e.printStackTrace();
 +		}
-+
 +		catch (IllegalArgumentException e) {
-+
 +			e.printStackTrace();
 +		} catch (IllegalAccessException e) {
-+			// TODO Auto-generated catch block
 +			e.printStackTrace();
 +		}
 +
@@ -6283,17 +6472,17 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	private boolean regionAndServerIsSameGroup(HRegionInfo regionInfo,
 +			HServerInfo serverInfo) {
 +
-+		List<String> groups = new ArrayList();
-+		String[] groupss = this.getTableGroups(regionInfo.getTableDesc()
++		List<String> groups = new ArrayList<String>();
++		String[] groupss = getTableGroups(regionInfo.getTableDesc()
 +				.getNameAsString());
 +		for (String s : groupss)
 +			groups.add(s);
 +
 +		boolean inGroup = false;
 +		for (String group : groups) {
-+			if (this.groupServers.get(group) == null)
++			if (groupServers.get(group) == null)
 +				continue;
-+			if (this.groupServers.get(group).contains(serverInfo)) {
++			if (groupServers.get(group).contains(serverInfo)) {
 +				inGroup = true;
 +				break;
 +			}
@@ -6326,7 +6515,10 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +		for (String group : groups) {
 +			System.out.println("table belong to :" + group);
-+			servers.addAll(groupServers.get(group));
++			if(groupServers.get(group)!=null)
++			{
++				servers.addAll(groupServers.get(group));
++			}
 +		}
 +
 +		HashMap<HRegionInfo, HServerAddress> maps = CheckMeta
@@ -6434,7 +6626,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +		if (haveGroup(tableName)) {
 +			groups = getTableGroupsInner(tableName);
 +		} else {
-+			ArrayList l = new ArrayList();
++			ArrayList<String> l = new ArrayList<String>();
 +			for (String s : groupDifConf.keySet()) {
 +				if (groupDifConf.get(s) == false) {
 +					l.add(s);
@@ -6482,37 +6674,37 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +	private List<HServerInfo> getDefaultServer() {
 +		List<HServerInfo> ret = new ArrayList<HServerInfo>();
-+		ret.addAll(this.groupServers.get(DEFAULT_GROUP));
++		ret.addAll(groupServers.get(DEFAULT_GROUP));
 +		return ret;
 +	}
 +
 +	private List<HServerInfo> getAvailableServer(List<HServerInfo> servers,
 +			String table) {
 +
-+		List<String> groups = this.tableGroup.get(table);
++		List<String> groups = tableGroup.get(table);
 +
 +		if (groups == null) {
-+			groups = new ArrayList();
++			groups = new ArrayList<String>();
 +			groups.add(DEFAULT_GROUP);
 +		}
 +		List<HServerInfo> ret = new ArrayList<HServerInfo>();
 +		for (HServerInfo server : servers) {
 +
 +			for (String group : groups) {
-+				if (this.groupServers.get(group) == null) {
++				if (groupServers.get(group) == null) {
 +					continue;
 +				}
-+				if (this.groupServers.get(group).contains(server)) {
++				if (groupServers.get(group).contains(server)) {
 +					ret.add(server);
 +					break;
 +				}
 +			}
 +		}
 +		if (ret.size() == 0) {
-+			if (this.groupServers.get(DEFAULT_GROUP) == null) {
-+				this.initValue();
++			if (groupServers.get(DEFAULT_GROUP) == null) {
++				initValue();
 +			}
-+			ret.addAll(this.groupServers.get(DEFAULT_GROUP));
++			ret.addAll(groupServers.get(DEFAULT_GROUP));
 +		}
 +		return ret;
 +	}
@@ -6542,10 +6734,10 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			}
 +		} else {
 +			if (first)
-+				this.initValue();
++				initValue();
 +		}
 +		String encodedName = state.getRegion().getEncodedName();
-+		List<HServerInfo> servers = this.serverManager.getOnlineServersList();
++		List<HServerInfo> servers = serverManager.getOnlineServersList();
 +		// The remove below hinges on the fact that the call to
 +		// serverManager.getOnlineServersList() returns a copy
 +		if (serverToExclude != null)
@@ -6561,7 +6753,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +		// get available servers according to the group information
 +		if (servers.size() == 0 && (!rootOrMeta)) {
-+			this.initValue();
++			initValue();
 +			servers = this.getAvailableServer(servers, state.getRegion()
 +					.getTableDesc().getNameAsString());
 +		}
@@ -6612,11 +6804,11 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +	}
 +
-+	private String[] getGroupString(HRegionInfo info) {
-+		String groups = getGroupString(info.getTableDesc());
-+		return groups.split(GROUP_SPLITER);
-+
-+	}
++//	private String[] getGroupString(HRegionInfo info) {
++//		String groups = getGroupString(info.getTableDesc());
++//		return groups.split(GROUP_SPLITER);
++//
++//	}
 +
 +	private String getGroupStringRandom(HRegionInfo info) {
 +		String groups = getGroupString(info.getTableDesc());
@@ -6629,31 +6821,31 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +	}
 +
-+	private HashSet<HServerInfo> getGroupServer(HRegionInfo info) {
++//	private HashSet<HServerInfo> getGroupServer(HRegionInfo info) {
++//
++//		String[] groups = getGroupString(info);
++//		String group = groups[RANDOM.nextInt(groups.length)];
++//		if (groupServers.get(group) == null) {
++//			return groupServers.get("0");
++//		}
++//		return groupServers.get(group);
++//
++//	}
 +
-+		String[] groups = getGroupString(info);
-+		String group = groups[RANDOM.nextInt(groups.length)];
-+		if (groupServers.get(group) == null) {
-+			return groupServers.get("0");
-+		}
-+		return groupServers.get(group);
-+
-+	}
-+
-+	private List<HServerInfo> getGroupServerList(HRegionInfo info) {
-+
-+		String[] groups = getGroupString(info);
-+		String group = groups[RANDOM.nextInt(groups.length)];
-+		ArrayList<HServerInfo> ret = new ArrayList<HServerInfo>();
-+
-+		if (this.groupServers.get(group) == null) {
-+			ret.addAll(this.groupServers.get("0"));
-+			return ret;
-+		}
-+		ret.addAll(this.groupServers.get(group));
-+		return ret;
-+
-+	}
++//	private List<HServerInfo> getGroupServerList(HRegionInfo info) {
++//
++//		String[] groups = getGroupString(info);
++//		String group = groups[RANDOM.nextInt(groups.length)];
++//		ArrayList<HServerInfo> ret = new ArrayList<HServerInfo>();
++//
++//		if (groupServers.get(group) == null) {
++//			ret.addAll(groupServers.get("0"));
++//			return ret;
++//		}
++//		ret.addAll(this.groupServers.get(group));
++//		return ret;
++//
++//	}
 +
 +	private Map<String, List<HServerInfo>> getServerGroups(
 +			List<HServerInfo> servers) {
@@ -6661,7 +6853,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			Map<String, List<HServerInfo>> ret = new TreeMap<String, List<HServerInfo>>();
 +			for (HServerInfo server : servers) {
 +				String group = "0";
-+				for (Entry<String, HashSet<HServerInfo>> entry : this.groupServers
++				for (Entry<String, HashSet<HServerInfo>> entry : groupServers
 +						.entrySet()) {
 +					if (entry.getValue().contains(server)) {
 +						group = entry.getKey();
@@ -6669,7 +6861,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +					}
 +				}
 +				if (ret.get(group) == null) {
-+					ret.put(group, new ArrayList());
++					ret.put(group, new ArrayList<HServerInfo>());
 +				}
 +				ret.get(group).add(server);
 +			}
@@ -6693,7 +6885,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +		Map<HServerInfo, List<HRegionInfo>> assignments = new TreeMap<HServerInfo, List<HRegionInfo>>();
 +
 +		Map<HServerAddress, HServerInfo> serverMap = new TreeMap<HServerAddress, HServerInfo>();
-+		HashSet<HServerInfo> serversInfo = new HashSet<HServerInfo>();
++
 +
 +		Map<String, List<HServerInfo>> groupMap = getServerGroups(servers);
 +
@@ -6726,7 +6918,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +		String[] groups = groupString.split(GROUP_SPLITER);
 +		if (groups.length != 0) {
 +			for (String s : groups) {
-+				if (this.groupServers.get(s) != null) {
++				if (groupServers.get(s) != null) {
 +					return true;
 +				}
 +			}
@@ -6786,7 +6978,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +				+ " region(s) round-robin across " + servers.size()
 +				+ " server(s)");
 +		// Use fixed count thread pool assigning.
-+		BulkAssigner ba = new BulkStartupAssigner(this.master, bulkPlan, this);
++		BulkAssigner ba = new BulkStartupAssigner(master, bulkPlan, this);
 +		ba.bulkAssign();
 +		LOG.info("Bulk assigning done");
 +	}
@@ -6804,7 +6996,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	@Override
 +	public void assignAllUserRegions() throws IOException, InterruptedException {
 +		// Get all available servers
-+		this.initValue();
++		initValue();
 +		List<HServerInfo> servers = serverManager.getOnlineServersList();
 +
 +		// Scan META for all user regions, skipping any disabled tables
@@ -6837,7 +7029,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +				+ retainAssignment);
 +
 +		// Use fixed count thread pool assigning.
-+		BulkAssigner ba = new BulkStartupAssigner(this.master, bulkPlan, this);
++		BulkAssigner ba = new BulkStartupAssigner(master, bulkPlan, this);
 +		ba.bulkAssign();
 +		LOG.info("Bulk assigning done");
 +	}
@@ -6897,6 +7089,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	 * 
 +	 * @param data
 +	 */
++	@SuppressWarnings("unused")
 +	private void handleRegion(final RegionTransitionData data) {
 +		synchronized (regionsInTransition) {
 +			if (data == null || data.getServerName() == null) {
@@ -6910,7 +7103,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			}
 +			// Verify this is a known server
 +			if (!serverManager.isServerOnline(data.getServerName())
-+					&& !this.master.getServerName()
++					&& !master.getServerName()
 +					.equals(data.getServerName())) {
 +				LOG
 +				.warn("Attempted to handle region transition for server but "
@@ -7011,7 +7204,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +				// Handle OPENED by removing from transition and deleted zk node
 +				regionState.update(RegionState.State.OPEN, data.getStamp());
 +				this.executorServiceIn.submit(new OpenedRegionHandler(master,
-+						this, regionState.getRegion(), this.serverManager
++						this, regionState.getRegion(), serverManager
 +						.getServerInfo(data.getServerName())));
 +				break;
 +			}
