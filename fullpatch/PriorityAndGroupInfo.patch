@@ -1,3 +1,253 @@
+diff -uNr hbase-0.90.2/hbase-webapps/master/changegroupconf.jsp hbase-0.90.2-local/hbase-webapps/master/changegroupconf.jsp
+--- hbase-0.90.2/hbase-webapps/master/changegroupconf.jsp	1970-01-01 08:00:00.000000000 +0800
++++ hbase-0.90.2-local/hbase-webapps/master/changegroupconf.jsp	2011-07-04 12:03:25.000000000 +0800
+@@ -0,0 +1,245 @@
++<%@ page language="java" import="java.io.*" import="java.util.*"
++	import="org.apache.hadoop.hbase.master.HMaster"
++	import="org.apache.hadoop.hbase.HTableDescriptor"
++	import="org.apache.hadoop.hbase.HRegionInfo"
++	import="org.apache.hadoop.hbase.HServerAddress"
++	import="org.apache.hadoop.hbase.HServerInfo"
++	import="org.apache.hadoop.hbase.ClusterStatus"
++	import="org.apache.hadoop.hbase.master.GroupAssignmentManager"
++	import="org.apache.hadoop.hbase.allocation.group.ServerWithGroup"
++	import="org.apache.hadoop.hbase.allocation.group.MoveConfImpl"
++	contentType="text/html; charset=GB18030" pageEncoding="GB18030"%>
++<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
++<html>
++<head>
++<meta http-equiv="Content-Type" content="text/html; charset=GB18030">
++<link rel="stylesheet" type="text/css" href="/static/hbase.css" />
++<title>Distribute Group hbase-site.xml</title>
++<script type="text/javascript">
++	function validate_distform() {
++
++		var result = confirm("Do you want to distribute group hbase-site.xml or restart group regionservers??");
++		if (result == true) {
++			return true;
++		} else {
++			return false;
++		}
++	}
++</script>
++</head>
++<body>
++	<a id="logo" href="http://wiki.apache.org/lucene-hadoop/Hbase"><img src="/static/hbase_logo_med.gif" alt="HBase Logo" title="HBase Logo" /></a>
++	<h1 id="page_title">Distribute and Restart Group</h1>
++	<p id="links_menu"><a href="/master.jsp">Master</a>,<a href="/logs/">Local logs</a>, <a href="/stacks">Thread Dump</a>, <a href="/logLevel">Log Level</a>,<a href="showgroup.jsp">Group Information</a></p>
++	<hr id="head_rule" />
++	<%
++		class Distribute implements Runnable {
++			private HMaster master;
++			private List<String> groupserverlist;
++			private String currentdir;
++			private String command;
++
++			public Distribute(HMaster master,List<String> groupserverlist,
++					String currentdir, String command) {
++				this.master = master;
++				this.groupserverlist = groupserverlist;
++				this.currentdir = currentdir;
++				this.command = command;
++			}
++
++			public void run() {
++				if (command.equals("distconf")) {
++					MoveConfImpl moveimpl = new MoveConfImpl(currentdir);
++					for (String serveraddr : groupserverlist) {
++						try {
++							String addr = serveraddr.substring(0,serveraddr.indexOf(","));
++							System.out.println("Before Distribute "+addr+" configuration");
++							//distribute new configuration
++							moveimpl.DistributeConf(addr,
++									"distribute");
++							System.out.println("After Distribute configuration");
++						} catch (Exception e) {
++							e.printStackTrace();
++						}
++					}
++				} else if (command.equals("restart")) {
++					synchronized (GroupAssignmentManager.class) {
++						MoveConfImpl moveimpl = new MoveConfImpl(currentdir);
++						for (String serveraddr : groupserverlist) {
++							try {
++								String addr = serveraddr.substring(0,serveraddr.indexOf(","));
++								System.out.println("Before Restart "+addr+" configuration");
++								moveimpl.ImplRegionServer(addr,
++										"stop");
++								moveimpl.ImplRegionServer(addr,
++										"start");
++								System.out.println("After Restart configuration");
++							} catch (Exception e) {
++								e.printStackTrace();
++							}
++						}
++						
++						while(true){
++							int onlinenum = 0;
++							ClusterStatus status = master.getClusterStatus();
++							Collection<HServerInfo> servers = status.getServerInfo();
++							for (HServerInfo info: servers){
++								String onlineserver = info.getHostname()+","+info.getServerAddress().getPort();
++								if (groupserverlist.contains(onlineserver)){
++									onlinenum++;
++								}
++							}
++							if (groupserverlist.size() != onlinenum){
++								try{
++									Thread.sleep(1000);
++								}catch(InterruptedException ex){
++									ex.printStackTrace();
++								}
++								continue;
++							}else{
++								break;
++							}
++						}
++					}
++				}
++				synchronized (ServerWithGroup.class) {
++					ServerWithGroup.setIsprocess(false);
++					ServerWithGroup.setDoMoveconf(false);
++				}
++			}
++		}
++	%>
++	<%
++		final String DEFAULT_GROUP = "0";
++		final String groupinfofilename = "groupinformation.conf";
++		HMaster master = (HMaster) getServletContext().getAttribute(
++				HMaster.MASTER);
++		String CURRENTDIR = request.getRealPath("/");
++
++		Map<String, List<String>> groupmap = new HashMap<String, List<String>>();
++		List<String> groupserverlist = new ArrayList<String>();
++		String submit = request.getParameter("cfsubmit");
++		boolean isprocess = ServerWithGroup.isIsprocess();
++
++		if (!isprocess) {
++			String line = "";
++			try {
++				line = ServerWithGroup.readGroupInfo(master,
++						groupinfofilename);
++			} catch (IOException ex) {
++			}
++			groupmap = ServerWithGroup.initGroupMap(master, line);
++			String configuration = null;
++			if (request.getParameter("configurename") != null) {
++				configuration = request.getParameter("configurename");
++				if (configuration.length()>0 ){
++					configuration=configuration.replaceAll("[&]lt;","<");
++					configuration=configuration.replaceAll("[&]gt;",">");
++					configuration=configuration.replaceAll("[&]quot;","\"");
++				File xmlfile = new File(CURRENTDIR + "/hbase-site.xml");
++				BufferedWriter bw = new BufferedWriter(new FileWriter(
++						xmlfile));
++				bw.write(configuration);
++				bw.close();
++				}
++			}
++			if (request.getParameter("groupname") != null) {
++				String group = request.getParameter("groupname");
++				if(group.equals("null")){
++					out.println("<script type=\"text/javascript\">");
++					out.println("alert(\"Warning , please choose right group...\")");
++					out.println("history.back(-1)");
++					out.println("</script>");
++					return;
++				}
++				
++				groupserverlist = groupmap.get(group);
++				if (groupserverlist == null || groupserverlist.size() <= 0) {
++					out.println("<script type=\"text/javascript\">");
++					out.println("alert(\"Warning , there is no regionserver in this group.\")");
++					out.println("history.back(-1)");
++					out.println("</script>");
++				}
++				if (submit != null && submit.length() > 0) {
++					if (submit.equals("Distribute")) {
++						if (configuration != null
++								&& configuration.length() > 0) {
++							out.println("Distribute group "+group);
++							synchronized (ServerWithGroup.class) {
++								ServerWithGroup.setIsprocess(true);
++								ServerWithGroup.setDoMoveconf(true);
++							}
++							Thread DistributeThread = new Thread(
++									new Distribute(master,groupserverlist,
++											CURRENTDIR, "distconf"));
++							DistributeThread.setName("Distribute Thread");
++							DistributeThread.start();
++							out.println("<script type=\"text/javascript\">");
++							out.println("alert(\"Ready to distribute hbase-site.xml ,please wait...\")");
++							out.println("window.location.href='changegroupconf.jsp'");
++							out.println("</script>");
++							return;
++						}else{
++							out.println("<script type=\"text/javascript\">");
++							out.println("alert(\"Hbase-site.xml is null ,please write it.\")");
++							out.println("history.back(-1)");
++							out.println("</script>");
++							return ;
++						}
++					} else if (submit.equals("Restart")) {
++						out.println("Restart group "+group);
++						synchronized (ServerWithGroup.class) {
++							ServerWithGroup.setIsprocess(true);
++							ServerWithGroup.setDoMoveconf(true);
++						}
++						Thread RestartThread = new Thread(new Distribute(
++								master,groupserverlist, CURRENTDIR, "restart"));
++						RestartThread.setName("Restart Thread");
++						RestartThread.start();
++						out.println("<script type=\"text/javascript\">");
++						out.println("alert(\"Ready to restart group regionservers ,please wait...\")");
++						out.println("window.location.href='changegroupconf.jsp'");
++						out.println("</script>");
++						return;
++					}
++				}
++				
++			}
++		} else {
++			boolean ismoving = ServerWithGroup.isDoMoveconf();
++			if (ismoving) {
++				out.println("<center>");
++				out.println("<form name='flushform' action='#' method=post>");
++				out.println("<input type=submit name=submit value=Refresh style=\"width:60%;height:30px\" >");
++				out.println("</form>");
++				out.println("</center>");
++			}else{
++				out.println("<script type=\"text/javascript\">");
++				out.println("alert(\"System is busy ,do it later , back to home \")");
++				out.println("window.location.href='showgroup.jsp'");
++				out.println("</script>");
++				
++			}
++		}
++		out.println("<center>");
++		out.println("<form name=distform action='#' method='post' onSubmit=\"return validate_distform()\">");
++		out.println("<br><font size=16 >Choose Group:</font>");
++		out.println("<select name=groupname size=1 style=\"width:160px\">");
++		out.println("<option value=null > </option>");
++		for (String gp : groupmap.keySet()) {
++			if (!gp.equals(DEFAULT_GROUP)){
++				out.println("<option value=" + gp + " >" + gp
++					+ "</option>");
++			}
++		}
++		out.println("</select><br>");
++
++		out.println("<br>New hbase-site.xml:<br>");
++		out.println("<textarea cols=60 rows=25 name=configurename></textarea>");
++		out.println("<br><br>Distribute group configure:<input type=submit name=cfsubmit value=\"Distribute\" style=\"width:20%;height:30px\">");
++		out.println("<br><br>Restart group regionserver:<input type=submit name=cfsubmit value=\"Restart\" style=\"width:20%;height:30px\">");
++		out.println("</form>");
++		out.println("</center>");
++	%>
++</body>
++</html>
+\ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp hbase-0.90.2-local/hbase-webapps/master/changetablegroup.jsp
 --- hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp	1970-01-01 08:00:00.000000000 +0800
 +++ hbase-0.90.2-local/hbase-webapps/master/changetablegroup.jsp	2011-06-29 15:49:20.000000000 +0800
@@ -607,8 +857,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/groupinfo.jsp hbase-0.90.2-local/hba
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/moveremoteconf.sh hbase-0.90.2-local/hbase-webapps/master/moveremoteconf.sh
 --- hbase-0.90.2/hbase-webapps/master/moveremoteconf.sh	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/moveremoteconf.sh	2011-06-24 17:03:35.000000000 +0800
-@@ -0,0 +1,32 @@
++++ hbase-0.90.2-local/hbase-webapps/master/moveremoteconf.sh	2011-07-01 11:10:16.000000000 +0800
+@@ -0,0 +1,38 @@
 +#!/bin/bash
 +#Filename: moveremoteconf.sh
 +
@@ -640,6 +890,12 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/moveremoteconf.sh hbase-0.90.2-local
 +	rm -fr $filename
 +        rm -fr lib
 +        rm -f  hbase-*.jar
++elif [ "$command" = "distribute" ]
++then
++	#distribute hbase-site.xml to server
++	filename="hbase-site.xml"
++	scp -r $filename $server:$confdir/
++	rm -f $filename
 +fi
 diff -uNr hbase-0.90.2/hbase-webapps/master/processgroup.jsp hbase-0.90.2-local/hbase-webapps/master/processgroup.jsp
 --- hbase-0.90.2/hbase-webapps/master/processgroup.jsp	1970-01-01 08:00:00.000000000 +0800
@@ -909,7 +1165,7 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/processgroup.jsp hbase-0.90.2-local/
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/restartserver.sh hbase-0.90.2-local/hbase-webapps/master/restartserver.sh
 --- hbase-0.90.2/hbase-webapps/master/restartserver.sh	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/restartserver.sh	2011-06-24 17:03:35.000000000 +0800
++++ hbase-0.90.2-local/hbase-webapps/master/restartserver.sh	2011-06-20 10:57:25.000000000 +0800
 @@ -0,0 +1,16 @@
 +#!/bin/bash
 +#Filename: restartserver.sh
@@ -929,8 +1185,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/restartserver.sh hbase-0.90.2-local/
 +fi
 diff -uNr hbase-0.90.2/hbase-webapps/master/showgroup.jsp hbase-0.90.2-local/hbase-webapps/master/showgroup.jsp
 --- hbase-0.90.2/hbase-webapps/master/showgroup.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/showgroup.jsp	2011-06-29 15:50:23.000000000 +0800
-@@ -0,0 +1,217 @@
++++ hbase-0.90.2-local/hbase-webapps/master/showgroup.jsp	2011-07-01 15:38:28.000000000 +0800
+@@ -0,0 +1,222 @@
 +<%@ page language="java" import="java.util.*" import="java.io.*"
 +	import="org.apache.hadoop.hbase.master.HMaster"
 +	import="org.apache.hadoop.hbase.HTableDescriptor"
@@ -1047,6 +1303,7 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/showgroup.jsp hbase-0.90.2-local/hba
 +		out.println("<TD>Server num</TD>");
 +		out.println("<TD>Region num</TD>");
 +		out.println("<TD>Action</TD>");
++		out.println("<TD>Change Group Configuration Or Restart Group</TD>");
 +		out.println("</TR>");
 +		out.println("<TR>");
 +		Map<String, Integer> servermap = new HashMap<String, Integer>();
@@ -1076,9 +1333,12 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/showgroup.jsp hbase-0.90.2-local/hba
 +			if (!gp.equals(DEFAULT_GROUP)) {
 +				out.println("<TD><input type=submit name=" + gp
 +						+ ".del value=Delete ></TD>");
++				out.println("<TD><a href='changegroupconf.jsp'>Change</a></TD>");
 +			}else{
 +				out.println("<TD>default group</TD>");
++				out.println("<TD></TD>");
 +			}
++			
 +			out.println("</TR>");
 +		}
 +		out.println("<TR>");
@@ -1145,14 +1405,15 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/showgroup.jsp hbase-0.90.2-local/hba
 +		out.println("</TR>");
 +		out.println("</TABLE>");
 +		out.println("</form>");
++		
 +	%>
 +</body>
 +</html>
 \ No newline at end of file
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java	2011-06-28 10:00:53.000000000 +0800
-@@ -0,0 +1,240 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java	2011-07-20 11:41:12.000000000 +0800
+@@ -0,0 +1,284 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
 + *
@@ -1175,16 +1436,17 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMet
 +package org.apache.hadoop.hbase.allocation;
 +import java.io.IOException;
 +import java.util.HashMap;
-+import java.util.Map;
++import java.util.TreeSet;
++import java.util.WeakHashMap;
 +import java.util.Map.Entry;
 +
 +import org.apache.commons.logging.Log;
 +import org.apache.commons.logging.LogFactory;
-+import org.apache.hadoop.hbase.HBaseConfiguration;
 +import org.apache.hadoop.hbase.HConstants;
 +import org.apache.hadoop.hbase.HRegionInfo;
 +import org.apache.hadoop.hbase.HServerAddress;
 +import org.apache.hadoop.hbase.HServerInfo;
++import org.apache.hadoop.hbase.HTableDescriptor;
 +import org.apache.hadoop.hbase.client.HTable;
 +import org.apache.hadoop.hbase.client.Result;
 +import org.apache.hadoop.hbase.client.ResultScanner;
@@ -1199,6 +1461,49 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMet
 +public class CheckMeta {
 +	private static final Log LOG = LogFactory.getLog(CheckMeta.class);
 +	static HTable t=null;
++	
++	
++	/**
++	 * get table descriptors.
++	 * @return table descriptors.
++	 */
++	public static HTableDescriptor[] getTables()
++	{	
++		HTableDescriptor[] ret=null;		
++		try {
++			Scan s=new Scan();
++			if(t==null)
++				t=new HTable(".META.");
++			t.setScannerCaching(1000);
++			s.setCaching(1000);
++			ResultScanner sn=t.getScanner(s);
++			Result r=null;
++			final TreeSet<HTableDescriptor> uniqueTables = new TreeSet<HTableDescriptor>();
++			while((r=sn.next()) != null)
++			{
++				byte[] value = r.getValue(HConstants.CATALOG_FAMILY,
++						HConstants.REGIONINFO_QUALIFIER);
++				HRegionInfo info = null;
++				if (value != null) {
++					info = Writables.getHRegionInfo(value);
++				}
++				// Only examine the rows where the startKey is zero length
++				if (info != null && info.getStartKey().length == 0) {
++					uniqueTables.add(info.getTableDesc());
++				}
++			}
++			try {
++				sn.close();
++			} catch (Exception e) {
++				e.printStackTrace();
++			}
++			ret=uniqueTables.toArray(new HTableDescriptor[uniqueTables.size()]);
++			return ret;
++		} catch (IOException e) {
++			e.printStackTrace();
++		}
++		return null;
++	}
 +	/**
 +	 * test if the server and address  are equal.
 +	 * @param server
@@ -1396,7 +1701,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMet
 \ No newline at end of file
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	2011-06-29 17:23:37.000000000 +0800
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	2011-07-20 11:41:12.000000000 +0800
 @@ -0,0 +1,449 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -1619,7 +1924,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/Schedule
 +	public boolean shouldWork(Job<T> job, int pri) {
 +		if (job == null)
 +			return false;
-+		return (pri == job.orgPri)
++		return (pri >= job.orgPri)
 +		|| (job.orgPri < 1 && pri == 1)
 +		|| (job.orgPri > this.lowestThreadPir && pri == this.lowestThreadPir);
 +	}
@@ -1676,7 +1981,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/Schedule
 +	private void refreshIner() {
 +		try {
 +			if ((outputIndicator << 58) >>> 58 == 0)
-+				LOG.info(Calendar.getInstance().getTime() + ":" + this.queue);
++				LOG.debug(Calendar.getInstance().getTime() + ":" + this.queue);
 +			outputIndicator++;
 +			for (Job<T> job : queue) {
 +				if (job != null) {
@@ -1849,8 +2154,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/Schedule
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java	2011-06-29 17:12:36.000000000 +0800
-@@ -0,0 +1,189 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java	2011-07-01 13:00:14.000000000 +0800
+@@ -0,0 +1,195 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
 + *
@@ -1942,6 +2247,12 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Au
 +					e.printStackTrace();
 +				}
 +			}
++			try {
++				final long SLEEP_WHENSTART = 600000; // 10 minutes
++				Thread.sleep(SLEEP_WHENSTART);
++			} catch (InterruptedException e) {
++				e.printStackTrace();
++			}
 +			while (true) {
 +				// auto balance all table
 +				try {
@@ -2022,7 +2333,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Au
 +				LOG.debug("when get clusterstate form zookeeper "+e.getMessage());
 +				return false;
 +			}
-+			LOG.debug("data is "+Bytes.toString(data));
++			//LOG.debug("data is "+Bytes.toString(data));
 +			if (data!= null){
 +				return true;
 +			}else {
@@ -2042,8 +2353,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Au
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java	2011-06-29 15:09:23.000000000 +0800
-@@ -0,0 +1,141 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java	2011-07-01 14:41:43.000000000 +0800
+@@ -0,0 +1,179 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
 + *
@@ -2171,6 +2482,44 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Mo
 +		try {
 +			process = Runtime.getRuntime()
 +					.exec(cmd, null, new File(currentdir));
++		} catch (IOException e) {
++			e.printStackTrace();
++			return false;
++		}
++		try {
++			process.waitFor();
++		} catch (InterruptedException e) {
++			e.printStackTrace();
++			return false;
++		}
++		process.destroy();
++		return true;
++	}
++	
++	/**
++	 * DistributeConf configuration to regionserver
++	 * 
++	 * @param server
++	 *            regionserver name ,example "dw83.kgb.sqa.cm4,60020"
++	 * @param command
++	 *            if command is "distribute " ,it will distribute hbase-site,xml to remote regionservwer
++	 * @return true if success ,else false
++	 */
++	public boolean DistributeConf(String server, String command) {
++		Process process = null;
++		if (!command.equals("distribute")) {
++			LOG.info("This shell script only support distribute  command.");
++			return false;
++		}
++		String[] distributecommand = new String[5];
++		distributecommand[0] = currentdir + "/moveremoteconf.sh";
++		distributecommand[1] = server;
++		distributecommand[2] = ConfDIR;
++		distributecommand[3] = HbaseDIR;
++		distributecommand[4] = command;
++		try {
++			process = Runtime.getRuntime().exec(distributecommand, null,
++					new File(currentdir));
 +		} catch (IOException e) {
 +			e.printStackTrace();
 +			return false;
@@ -2589,8 +2938,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Pr
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java	2011-06-29 15:10:01.000000000 +0800
-@@ -0,0 +1,675 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java	2011-07-01 19:26:07.000000000 +0800
+@@ -0,0 +1,673 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
 + *
@@ -3121,10 +3470,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Se
 +		HRegionInterface hri = null;
 +		try {
 +			hri = coon.getHRegionConnection(addr);
-+			if (hri.isStopped())
-+				return regionlist;
 +			regionlist = hri.getOnlineRegions();
-+		} catch (IOException e) {
++		} catch (Throwable  e) {
 +			e.printStackTrace();
 +		}
 +		return regionlist;
@@ -3852,8 +4199,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/Tes
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	2011-06-29 17:27:15.000000000 +0800
-@@ -0,0 +1,1812 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	2011-07-20 11:41:12.000000000 +0800
+@@ -0,0 +1,1806 @@
 +package org.apache.hadoop.hbase.ipc;
 +
 +/**
@@ -3916,6 +4263,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +import org.apache.hadoop.hbase.HTableDescriptor;
 +import org.apache.hadoop.hbase.MasterNotRunningException;
 +import org.apache.hadoop.hbase.ZooKeeperConnectionException;
++import org.apache.hadoop.hbase.allocation.CheckMeta;
 +import org.apache.hadoop.hbase.allocation.ScheduleQueue;
 +import org.apache.hadoop.hbase.client.Action;
 +import org.apache.hadoop.hbase.client.HBaseAdmin;
@@ -4074,7 +4422,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +	private Handler[] handlers = null;
 +	private Handler[] priorityHandlers = null;
 +	protected HBaseRPCErrorHandler errorHandler = null;
-+	private static int queueCapacity = 200;
++	private static int queueCapacity = 300;
 +	private static final ScheduleQueue<Call> queue = new ScheduleQueue<Call>(
 +			queueCapacity, 10);
 +
@@ -4309,12 +4657,10 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +	 * Initiate the table priorities.
 +	 */
 +	private void initPriority() {
-+		HBaseAdmin admin;
 +		try {
-+			admin = new HBaseAdmin(conf);
 +			handleFreshInter = conf.getInt("hbase.schedule.refreshinter", 7);
 +			move = Integer.SIZE - handleFreshInter;
-+			HTableDescriptor[] tableDs = admin.listTables();
++			HTableDescriptor[] tableDs = CheckMeta.getTables();
 +			int pri = defaultPri;
 +			for (HTableDescriptor des : tableDs) {
 +				byte[] prib = des.getValue(Bytes.toBytes(pri_string));
@@ -4329,12 +4675,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +				}
 +				tablePriMap.put(des.getNameAsString(), pri);
 +			}
-+		} catch (MasterNotRunningException e) {
-+
-+			e.printStackTrace();
-+		} catch (ZooKeeperConnectionException e) {
-+
-+		} catch (IOException e) {
++		} catch (Exception e) {
 +			e.printStackTrace();
 +		}
 +
@@ -5220,7 +5561,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +			Call call = new Call(id, param, this);
 +			report++;
 +			if (((report << 54) >>> 54) == 0) {
-+				System.out.println("client :" + call);
++				//System.out.println("client :" + call);
 +			}
 +			if (priorityCallQueue != null
 +					&& getQosLevel(param) > highPriorityLevel) {
@@ -5668,8 +6009,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	2011-06-29 17:22:55.000000000 +0800
-@@ -0,0 +1,1544 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	2011-07-20 11:41:12.000000000 +0800
+@@ -0,0 +1,1590 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
 + *
@@ -5783,7 +6124,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	// TimeoutMonitor timeoutMonitor;
 +	static CatalogTracker catalogTracker;
 +	private ZKTable zkTableIn;
-+	static final int refreshInterver = 10000;
++	static final int refreshInterver = 500000;
 +	private ExecutorService executorServiceIn = null;
 +
 +	// the gap between the maximum and minimum when do the balance
@@ -5794,32 +6135,38 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	 * group infomation
 +	 */
 +	static {
-+		
++
 +		try {
-+			long period=conf.getLong("hbase.balancer.period",300000);
-+			AutoBalance balancer=new AutoBalance(period);
++			long period = conf.getLong("hbase.balancer.period", 300000);
++			AutoBalance balancer = new AutoBalance(period);
 +			balancer.startBalance();
 +		} catch (Exception e1) {
-+			LOG.error("start balancer error"+e1.getMessage());
++			LOG.error("start balancer error" + e1.getMessage());
 +			e1.printStackTrace();
 +		}
 +		Thread refresher = new Thread() {
 +			public void run() {
 +				while (true) {
 +					try {
++						try {
++							sleep(refreshInterver);
++						} catch (Exception e1) {
++
++							e1.printStackTrace();
++						}
 +						if (GroupAssignmentManager.master != null
-+								&& GroupAssignmentManager.master.isAlive()&&!master.isStopped()) {
-+							HTableDescriptor[] dess = GroupAssignmentManager
-+							.initValue();
-+							maintainGroup(dess);
-+							try {
-+								LOG.debug("groupDifConf:" + groupDifConf);
-+								LOG.debug("server groups:" + groupServers);
-+								LOG.debug("table groups:" + tableGroup);
-+								sleep(refreshInterver);
-+							} catch (InterruptedException e) {
-+								e.printStackTrace();
++								&& GroupAssignmentManager.master.isAlive()
++								&& !master.isStopped()) {
++							synchronized(GroupAssignmentManager.class)
++							{
++								HTableDescriptor[] dess = GroupAssignmentManager
++								.initValue();
++								maintainGroup(dess);
 +							}
++							LOG.debug("groupDifConf:" + groupDifConf);
++							LOG.debug("server groups:" + groupServers);
++							LOG.debug("table groups:" + tableGroup);
++
 +						} else if (GroupAssignmentManager.master == null) {
 +
 +							try {
@@ -6230,32 +6577,32 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			}
 +		}
 +
-+	}
-+
++	}  
 +	private static HTableDescriptor[] listTables() throws IOException {
-+		final TreeSet<HTableDescriptor> uniqueTables = new TreeSet<HTableDescriptor>();
-+		MetaScannerVisitor visitor = new MetaScannerVisitor() {
-+			public boolean processRow(Result result) throws IOException {
-+				try {
-+					byte[] value = result.getValue(HConstants.CATALOG_FAMILY,
-+							HConstants.REGIONINFO_QUALIFIER);
-+					HRegionInfo info = null;
-+					if (value != null) {
-+						info = Writables.getHRegionInfo(value);
-+					}
-+					// Only examine the rows where the startKey is zero length
-+					if (info != null && info.getStartKey().length == 0) {
-+						uniqueTables.add(info.getTableDesc());
-+					}
-+					return true;
-+				} catch (RuntimeException e) {
-+					throw e;
-+				}
-+			}
-+		};
-+		MetaScanner.metaScan(conf, visitor);
-+
-+		return uniqueTables.toArray(new HTableDescriptor[uniqueTables.size()]);
++		return CheckMeta.getTables();
++//		final TreeSet<HTableDescriptor> uniqueTables = new TreeSet<HTableDescriptor>();
++//		MetaScannerVisitor visitor = new MetaScannerVisitor() {
++//			public boolean processRow(Result result) throws IOException {
++//				try {
++//					byte[] value = result.getValue(HConstants.CATALOG_FAMILY,
++//							HConstants.REGIONINFO_QUALIFIER);
++//					HRegionInfo info = null;
++//					if (value != null) {
++//						info = Writables.getHRegionInfo(value);
++//					}
++//					// Only examine the rows where the startKey is zero length
++//					if (info != null && info.getStartKey().length == 0) {
++//						uniqueTables.add(info.getTableDesc());
++//					}
++//					return true;
++//				} catch (RuntimeException e) {
++//					throw e;
++//				}
++//			}
++//		};
++//		MetaScanner.metaScan(conf, visitor);
++//
++//		return uniqueTables.toArray(new HTableDescriptor[uniqueTables.size()]);
 +	}
 +
 +	/**
@@ -6381,7 +6728,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			LOG.info("enable :" + table + " finished");
 +		} catch (Exception e) {
 +			e.printStackTrace();
-+		} 
++		}
 +	}
 +
 +	private static boolean first = true;
@@ -6401,35 +6748,37 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	 * @return the tables belong to the cluster
 +	 */
 +	public static HTableDescriptor[] initValue() {
++		
 +
-+		boolean fileExist = readConfig();
-+
-+		if (!first && !fileExist) {
-+			return null;
-+		}
-+		first = false;
-+		HTableDescriptor[] dess = null;
-+		try {
-+
-+			dess = listTables();
-+			for (HTableDescriptor des : dess) {
-+				String[] groups = new String[] { "0" };
-+				byte[] groupsb = des.getValue(GROUP_KEY);
-+				if (groupsb != null) {
-+					groups = Bytes.toString(des.getValue(GROUP_KEY)).split(
-+							GROUP_SPLITER);
-+				}
-+				ArrayList<String> list = new ArrayList<String>();
-+				for (String group : groups)
-+					list.add(group);
-+				tableGroup.put(des.getNameAsString(), list);
-+
++		
++			boolean fileExist = readConfig();
++	
++			if (!first && !fileExist) {
++				return null;
 +			}
-+		} catch (IOException e) {
-+			e.printStackTrace();
-+		}
-+		initServerInfo();
-+		return dess;
++			first = false;
++			HTableDescriptor[] dess = null;
++			try {
++				dess = listTables();
++				for (HTableDescriptor des : dess) {
++					String[] groups = new String[] { "0" };
++					byte[] groupsb = des.getValue(GROUP_KEY);
++					if (groupsb != null) {
++						groups = Bytes.toString(des.getValue(GROUP_KEY)).split(
++								GROUP_SPLITER);
++					}
++					ArrayList<String> list = new ArrayList<String>();
++					for (String group : groups)
++						list.add(group);
++					tableGroup.put(des.getNameAsString(), list);
++	
++				}
++			} catch (IOException e) {
++				e.printStackTrace();
++			}
++			initServerInfo();
++			return dess;
++		
 +	}
 +
 +	public GroupAssignmentManager(Server master, ServerManager serverManager,
@@ -6437,18 +6786,20 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +	throws KeeperException {
 +		super(master, serverManager, catalogTracker, service);
 +		GroupAssignmentManager.master = (HMaster) master;
-+		GroupAssignmentManager.master.getZooKeeper().registerListenerFirst(this);
++		GroupAssignmentManager.master.getZooKeeper()
++		.registerListenerFirst(this);
 +		GroupAssignmentManager.master.balanceSwitch(false);
-+		GroupAssignmentManager.conf = GroupAssignmentManager.master.getConfiguration();
++		GroupAssignmentManager.conf = GroupAssignmentManager.master
++		.getConfiguration();
 +		GroupAssignmentManager.serverManager = serverManager;
-+		GroupAssignmentManager.catalogTracker = catalogTracker; 
++		GroupAssignmentManager.catalogTracker = catalogTracker;
 +		try {
 +			Field f = AssignmentManager.class.getDeclaredField("zkTable");
 +			f.setAccessible(true);
 +			this.zkTableIn = (ZKTable) f.get(this);
 +		} catch (Exception e) {
 +			e.printStackTrace();
-+		} 
++		}
 +
 +		try {
 +			Field f = AssignmentManager.class
@@ -6460,8 +6811,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			e.printStackTrace();
 +		} catch (NoSuchFieldException e) {
 +			e.printStackTrace();
-+		}
-+		catch (IllegalArgumentException e) {
++		} catch (IllegalArgumentException e) {
 +			e.printStackTrace();
 +		} catch (IllegalAccessException e) {
 +			e.printStackTrace();
@@ -6515,8 +6865,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +		for (String group : groups) {
 +			System.out.println("table belong to :" + group);
-+			if(groupServers.get(group)!=null)
-+			{
++			if (groupServers.get(group) != null) {
 +				servers.addAll(groupServers.get(group));
 +			}
 +		}
@@ -6639,7 +6988,30 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			groups = new String[] { DEFAULT_GROUP };
 +		return groups;
 +	}
-+
++	private static List<HServerInfo> filterRootServer(List<HServerInfo> servers)
++	{
++		try {
++			if(servers.size()<=1)
++			{
++				return servers;
++			}
++			HServerAddress rootAddress=catalogTracker.getRootLocation();
++			if(rootAddress!=null)
++			{
++				for(HServerInfo server:servers)
++				{
++					if(server.getServerAddress().equals(rootAddress))
++					{
++						servers.remove(server);
++						return servers;
++					}
++				}
++			}
++		} catch (Exception e) {
++			e.printStackTrace();
++		}
++		return servers;
++	}
 +	/**
 +	 * Get servers which this table can use according to group information
 +	 * 
@@ -6668,7 +7040,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			ret = new ArrayList<HServerInfo>();
 +			ret.addAll(groupServers.get(DEFAULT_GROUP));
 +		}
-+		return ret;
++		
++		return filterRootServer(ret);
 +
 +	}
 +
@@ -6680,12 +7053,12 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +	private List<HServerInfo> getAvailableServer(List<HServerInfo> servers,
 +			String table) {
-+
-+		List<String> groups = tableGroup.get(table);
-+
-+		if (groups == null) {
-+			groups = new ArrayList<String>();
-+			groups.add(DEFAULT_GROUP);
++		
++		List<String> groups =new ArrayList<String>();
++		String groupsStr[]=getTableGroups(table);
++		for(String s:groupsStr)
++		{
++			groups.add(s);
 +		}
 +		List<HServerInfo> ret = new ArrayList<HServerInfo>();
 +		for (HServerInfo server : servers) {
@@ -6706,13 +7079,13 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			}
 +			ret.addAll(groupServers.get(DEFAULT_GROUP));
 +		}
-+		return ret;
++		return filterRootServer(ret);
 +	}
 +
 +	@Override
 +	RegionPlan getRegionPlan(final RegionState state,
 +			final HServerInfo serverToExclude, final boolean forceNewPlan) {
-+
++		List<HServerInfo> servers = serverManager.getOnlineServersList();
 +		boolean rootOrMeta = false;
 +		// if it's root or meta regions,use super getRegionPlan
 +		if (state.getRegion().isMetaRegion()
@@ -6727,17 +7100,41 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +					e.printStackTrace();
 +				}
 +			}
-+			if (groupServers.get(DEFAULT_GROUP) == null
-+					|| groupServers.get(DEFAULT_GROUP).size() == 0) {
-+				return super
-+				.getRegionPlan(state, serverToExclude, forceNewPlan);
++			
++			HServerAddress address=null;
++			if (state.getRegion().isMetaRegion())
++			{
++				try {
++					address=catalogTracker.getRootLocation();
++				} catch (InterruptedException e) {
++					e.printStackTrace();
++				}
++				if(address!=null)
++				{
++					HServerInfo rootServer=null;
++					for(HServerInfo serverInfo:servers)
++					{
++						if(serverInfo.getServerAddress().equals(address))
++						{
++							rootServer=serverInfo;
++							break;
++						}
++					}
++					if(rootServer!=null)
++					{
++						return new RegionPlan(state.getRegion(),null,rootServer);
++					}
++				
++				}
 +			}
++			return super
++			.getRegionPlan(state, serverToExclude, forceNewPlan);
 +		} else {
 +			if (first)
 +				initValue();
 +		}
 +		String encodedName = state.getRegion().getEncodedName();
-+		List<HServerInfo> servers = serverManager.getOnlineServersList();
++		
 +		// The remove below hinges on the fact that the call to
 +		// serverManager.getOnlineServersList() returns a copy
 +		if (serverToExclude != null)
@@ -6752,11 +7149,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +		}
 +
 +		// get available servers according to the group information
-+		if (servers.size() == 0 && (!rootOrMeta)) {
-+			initValue();
-+			servers = this.getAvailableServer(servers, state.getRegion()
-+					.getTableDesc().getNameAsString());
-+		}
++
 +		RegionPlan randomPlan = new RegionPlan(state.getRegion(), null,
 +				LoadBalancer.randomAssignment(servers));
 +		boolean newPlan = false;
@@ -6804,11 +7197,11 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +	}
 +
-+//	private String[] getGroupString(HRegionInfo info) {
-+//		String groups = getGroupString(info.getTableDesc());
-+//		return groups.split(GROUP_SPLITER);
-+//
-+//	}
++	// private String[] getGroupString(HRegionInfo info) {
++	// String groups = getGroupString(info.getTableDesc());
++	// return groups.split(GROUP_SPLITER);
++	//
++	// }
 +
 +	private String getGroupStringRandom(HRegionInfo info) {
 +		String groups = getGroupString(info.getTableDesc());
@@ -6821,31 +7214,31 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +	}
 +
-+//	private HashSet<HServerInfo> getGroupServer(HRegionInfo info) {
-+//
-+//		String[] groups = getGroupString(info);
-+//		String group = groups[RANDOM.nextInt(groups.length)];
-+//		if (groupServers.get(group) == null) {
-+//			return groupServers.get("0");
-+//		}
-+//		return groupServers.get(group);
-+//
-+//	}
++	// private HashSet<HServerInfo> getGroupServer(HRegionInfo info) {
++	//
++	// String[] groups = getGroupString(info);
++	// String group = groups[RANDOM.nextInt(groups.length)];
++	// if (groupServers.get(group) == null) {
++	// return groupServers.get("0");
++	// }
++	// return groupServers.get(group);
++	//
++	// }
 +
-+//	private List<HServerInfo> getGroupServerList(HRegionInfo info) {
-+//
-+//		String[] groups = getGroupString(info);
-+//		String group = groups[RANDOM.nextInt(groups.length)];
-+//		ArrayList<HServerInfo> ret = new ArrayList<HServerInfo>();
-+//
-+//		if (groupServers.get(group) == null) {
-+//			ret.addAll(groupServers.get("0"));
-+//			return ret;
-+//		}
-+//		ret.addAll(this.groupServers.get(group));
-+//		return ret;
-+//
-+//	}
++	// private List<HServerInfo> getGroupServerList(HRegionInfo info) {
++	//
++	// String[] groups = getGroupString(info);
++	// String group = groups[RANDOM.nextInt(groups.length)];
++	// ArrayList<HServerInfo> ret = new ArrayList<HServerInfo>();
++	//
++	// if (groupServers.get(group) == null) {
++	// ret.addAll(groupServers.get("0"));
++	// return ret;
++	// }
++	// ret.addAll(this.groupServers.get(group));
++	// return ret;
++	//
++	// }
 +
 +	private Map<String, List<HServerInfo>> getServerGroups(
 +			List<HServerInfo> servers) {
@@ -6886,7 +7279,6 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +		Map<HServerAddress, HServerInfo> serverMap = new TreeMap<HServerAddress, HServerInfo>();
 +
-+
 +		Map<String, List<HServerInfo>> groupMap = getServerGroups(servers);
 +
 +		for (HServerInfo server : servers) {
@@ -6900,12 +7292,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +					&& this.regionAndServerIsSameGroup(region.getKey(), server)) {
 +				assignments.get(server).add(region.getKey());
 +			} else {
-+				String group = this.getGroupStringRandom(region.getKey());
-+				List<HServerInfo> s = groupMap.get(group);
-+				if (s == null || s.size() == 0) {
-+					s = groupMap.get(DEFAULT_GROUP);
-+				}
-+				assignments.get(s.get(RANDOM.nextInt(s.size()))).add(
++				List <HServerInfo> avaServers=getAvailableServer(region.getKey().getTableDesc().getNameAsString());
++				assignments.get(avaServers.get(RANDOM.nextInt(avaServers.size()))).add(
 +						region.getKey());
 +			}
 +		}
@@ -6940,7 +7328,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			List<HRegionInfo> regions, List<HServerInfo> servers) {
 +		List<Pair<List<HRegionInfo>, List<HServerInfo>>> ret = new ArrayList<Pair<List<HRegionInfo>, List<HServerInfo>>>();
 +		HashMap<String, List<HRegionInfo>> groupToRegion = new HashMap<String, List<HRegionInfo>>();
-+
++		servers=filterRootServer(servers);
 +		for (HRegionInfo info : regions) {
 +			String groups = getGroupString(info.getTableDesc());
 +			if (!groupExist(groups)) {
@@ -7103,8 +7491,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +			}
 +			// Verify this is a known server
 +			if (!serverManager.isServerOnline(data.getServerName())
-+					&& !master.getServerName()
-+					.equals(data.getServerName())) {
++					&& !master.getServerName().equals(data.getServerName())) {
 +				LOG
 +				.warn("Attempted to handle region transition for server but "
 +						+ "server is not online: "
@@ -7159,7 +7546,7 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +						this.setOffline(info);
 +						this.clearRegionFromTransition(info);
 +					} catch (Exception e) {
-+			
++
 +						e.printStackTrace();
 +					}
 +					return;
@@ -7216,8 +7603,68 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/HMaster.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/HMaster.java	2011-03-28 04:50:34.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/HMaster.java	2011-06-22 15:17:40.000000000 +0800
-@@ -354,7 +354,7 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/HMaster.java	2011-07-20 11:41:12.000000000 +0800
+@@ -26,9 +26,11 @@
+ import java.net.UnknownHostException;
+ import java.util.ArrayList;
+ import java.util.Arrays;
++import java.util.Collection;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.concurrent.atomic.AtomicReference;
++import java.util.concurrent.locks.ReentrantReadWriteLock;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+@@ -73,6 +75,9 @@
+ import org.apache.hadoop.hbase.master.handler.TableDeleteFamilyHandler;
+ import org.apache.hadoop.hbase.master.handler.TableModifyFamilyHandler;
+ import org.apache.hadoop.hbase.master.metrics.MasterMetrics;
++import org.apache.hadoop.hbase.reconfig.ReconfigurableBase;
++import org.apache.hadoop.hbase.reconfig.ReconfigurationException;
++import org.apache.hadoop.hbase.reconfig.ReconfigurationServlet;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.replication.regionserver.Replication;
+ import org.apache.hadoop.hbase.security.User;
+@@ -84,13 +89,17 @@
+ import org.apache.hadoop.hbase.util.VersionInfo;
+ import org.apache.hadoop.hbase.zookeeper.ClusterStatusTracker;
+ import org.apache.hadoop.hbase.zookeeper.RegionServerTracker;
++import org.apache.hadoop.hbase.zookeeper.ZKUtil;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
+ import org.apache.hadoop.io.MapWritable;
+ import org.apache.hadoop.io.Text;
+ import org.apache.hadoop.ipc.RemoteException;
+ import org.apache.hadoop.net.DNS;
++import org.apache.zookeeper.CreateMode;
+ import org.apache.zookeeper.KeeperException;
+ import org.apache.zookeeper.Watcher;
++import org.apache.zookeeper.ZooDefs;
++import org.apache.zookeeper.ZooKeeper;
+ 
+ /**
+  * HMaster is the "master server" for HBase. An HBase cluster has one active
+@@ -170,7 +179,10 @@
+ 
+   private Thread catalogJanitorChore;
+   private LogCleaner logCleaner;
+-
++    // add by hongzhen.lm
++    private Reconfiguration reconfiguration;
++    private static final String CONF_SERVLET_PATH = "/hbconfchange";
++    private String hbase_reconfig_test = "Old";
+   /**
+    * Initializes the HMaster. The steps are as follows:
+    * <p>
+@@ -299,6 +311,7 @@
+       if (this.catalogTracker != null) this.catalogTracker.stop();
+       if (this.serverManager != null) this.serverManager.stop();
+       if (this.assignmentManager != null) this.assignmentManager.stop();
++      if (this.fileSystemManager != null) this.fileSystemManager.stop();
+       HConnectionManager.deleteConnection(this.conf, true);
+       this.zooKeeper.close();
+     }
+@@ -354,7 +367,7 @@
        this, conf.getInt("hbase.master.catalog.timeout", Integer.MAX_VALUE));
      this.catalogTracker.start();
  
@@ -7226,18 +7673,316 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
        this.catalogTracker, this.executorService);
      this.balancer = new LoadBalancer(conf);
      zooKeeper.registerListenerFirst(assignmentManager);
+@@ -543,8 +556,13 @@
+       int port = this.conf.getInt("hbase.master.info.port", 60010);
+       if (port >= 0) {
+         String a = this.conf.get("hbase.master.info.bindAddress", "0.0.0.0");
++        reconfiguration = new Reconfiguration(getConfiguration());
+         this.infoServer = new InfoServer(MASTER, a, port, false);
+         this.infoServer.setAttribute(MASTER, this);
++        this.infoServer.setAttribute(ReconfigurationServlet.
++                CONF_SERVLET_RECONFIGURABLE_PREFIX +
++                CONF_SERVLET_PATH, reconfiguration);
++        infoServer.addServlet("hbconfchange", CONF_SERVLET_PATH, ReconfigurationServlet.class);
+         this.infoServer.start();
+       }
+       // Start allowing requests to happen.
+@@ -561,6 +579,122 @@
+     }
+   }
+ 
++    /**
++     * reload  hbase-site.xml
++     * 
++     * @author hongzhen.lm E-mail:hongzhen.lm@taobao.com
++     * @since 2011-6-28 ÉÏÎç10:51:09
++     * @version 1.0
++     */
++    class Reconfiguration extends ReconfigurableBase {
++        private ReentrantReadWriteLock fsLock;
++        private ZooKeeper zooKeeper;
++
++        // utility methods to acquire and release read lock and write lock
++        void readLock() {
++            this.fsLock.readLock().lock();
++        }
++
++        void readUnlock() {
++            this.fsLock.readLock().unlock();
++        }
++
++        void writeLock() {
++            this.fsLock.writeLock().lock();
++        }
++
++        void writeUnlock() {
++            this.fsLock.writeLock().unlock();
++        }
++
++        boolean hasWriteLock() {
++            return this.fsLock.isWriteLockedByCurrentThread();
++        }
++
++        boolean hasReadLock() {
++            return this.fsLock.getReadHoldCount() > 0;
++        }
++
++        boolean hasReadOrWriteLock() {
++            return hasReadLock() || hasWriteLock();
++        }
++
++        public Reconfiguration(Configuration conf) {
++            super(conf);
++            zooKeeper = HMaster.this.zooKeeper.getZooKeeper();
++            this.fsLock = new ReentrantReadWriteLock(true); // init lock
++            init();// init reconfiguration root path into zookeeper
++        }
++
++        public void init() {
++            try {
++                zooKeeper.create(HConstants.HBASE_RECONFIG_ZOOKEEPER_PATH, new byte[0], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
++            } catch (KeeperException e) {
++
++                HMaster.LOG.error("[care] HMaster create config path into zookeeper have some error:" + e.getMessage());
++
++                e.printStackTrace();
++            } catch (InterruptedException e) {
++                HMaster.LOG.error("[care] HMaster create config path into zookeeper have some error:" + e.getMessage());
++                e.printStackTrace();
++            }
++
++        }
++
++        /**
++         * @return
++         */
++        @Override
++        public Collection<String> getReconfigurableProperties() {
++            // 
++            return Arrays.asList(HConstants.HBASE_RECONFIG_TEST);
++        }
++
++        /**
++         * @param property
++         * @param newVal
++         * @throws ReconfigurationException
++         */
++        @Override
++        protected void reconfigurePropertyImpl(String property, String newVal) throws ReconfigurationException {
++
++            if (isPropertyReconfigurable(property)) {
++                writeLock();
++                try {
++                    if (property.equals(HConstants.HBASE_RECONFIG_TEST)) {
++
++                        hbase_reconfig_test = newVal;
++                        // check reconfiguration node have exists
++
++                        HMaster.LOG.info("[care]hbase_reconfig_test oraginal:" + hbase_reconfig_test + "update:" + newVal);
++
++                    } else {
++                        throw new ReconfigurationException(property, newVal, getConf().get(property));
++                    }
++                    // notice hregionserver reconfigure
++                    if (zooKeeper != null && zooKeeper.exists(HConstants.HBASE_RECONFIG_ZOOKEEPER_PATH, false) != null) {
++                        HMaster.LOG.info("[care] notice HRegionServer reconfigure  ");
++                        zooKeeper.create(HConstants.HBASE_RECONFIG_ZOOKEEPER_PATH + "/reconfig_", new byte[0], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT_SEQUENTIAL);
++                    } else {
++                        throw new ReconfigurationException(property, newVal, getConf().get(property));
++                    }
++
++                } catch (NumberFormatException e) {
++                    throw new ReconfigurationException(property, newVal, getConf().get(property));
++                } catch (KeeperException e) {
++                    HMaster.LOG.info("KeeperException:" + e.getMessage());
++                    e.printStackTrace();
++                } catch (InterruptedException e) {
++                    // TODO Auto-generated catch block
++                    HMaster.LOG.info("InterruptedException:" + e.getMessage());
++                    e.printStackTrace();
++                } finally {
++
++                    writeUnlock();
++                }
++            }
++        }
++    }
+   private void stopServiceThreads() {
+     if (LOG.isDebugEnabled()) {
+       LOG.debug("Stopping service threads");
+@@ -692,12 +826,15 @@
+         }
+       }
+       List<RegionPlan> plans = this.balancer.balanceCluster(assignments);
++      long start = System.currentTimeMillis();
+       if (plans != null && !plans.isEmpty()) {
+         for (RegionPlan plan: plans) {
+           LOG.info("balance " + plan);
+           this.assignmentManager.balance(plan);
+         }
+       }
++      long end = System.currentTimeMillis();
++      metrics.addBalance(end - start);
+     }
+     return true;
+   }
+@@ -784,6 +921,13 @@
+       boolean sync)
+   throws IOException {
+     String tableName = newRegions[0].getTableDesc().getNameAsString();
++    // add permitions in zk
++    try {
++    	String zkpath = ZKUtil.joinZNode(HConstants.DEFAULT_ZOOKEEPER_ZNODE_PARENT, tableName);
++		ZKUtil.createAndFailSilent(zooKeeper, zkpath);
++	} catch (KeeperException e1) {
++		e1.printStackTrace();
++	}
+     if(MetaReader.tableExists(catalogTracker, tableName)) {
+       throw new TableExistsException(tableName);
+     }
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
 --- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java	2011-03-28 04:50:34.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java	2011-06-24 11:50:07.000000000 +0800
-@@ -106,6 +106,7 @@
++++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java	2011-07-20 11:41:12.000000000 +0800
+@@ -30,11 +30,11 @@
+ import java.net.BindException;
+ import java.net.InetSocketAddress;
+ import java.util.ArrayList;
++import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.HashMap;
+-import java.util.concurrent.ConcurrentHashMap;
+ import java.util.HashSet;
+ import java.util.Iterator;
+ import java.util.LinkedList;
+@@ -51,7 +51,6 @@
+ import java.util.concurrent.atomic.AtomicInteger;
+ import java.util.concurrent.locks.ReentrantReadWriteLock;
+ 
+-import com.google.common.collect.Lists;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
+@@ -77,7 +76,6 @@
+ import org.apache.hadoop.hbase.UnknownRowLockException;
+ import org.apache.hadoop.hbase.UnknownScannerException;
+ import org.apache.hadoop.hbase.YouAreDeadException;
+-import org.apache.hadoop.hbase.HConstants.OperationStatusCode;
+ import org.apache.hadoop.hbase.catalog.CatalogTracker;
+ import org.apache.hadoop.hbase.catalog.MetaEditor;
+ import org.apache.hadoop.hbase.catalog.RootLocationEditor;
+@@ -106,7 +104,12 @@
  import org.apache.hadoop.hbase.ipc.HBaseServer;
  import org.apache.hadoop.hbase.ipc.HMasterRegionInterface;
  import org.apache.hadoop.hbase.ipc.HRegionInterface;
 +import org.apache.hadoop.hbase.ipc.ScheduleHBaseServer;
  import org.apache.hadoop.hbase.ipc.ServerNotRunningException;
++import org.apache.hadoop.hbase.metrics.MetricsIntervalInt;
++import org.apache.hadoop.hbase.reconfig.ReconfigurableBase;
++import org.apache.hadoop.hbase.reconfig.ReconfigurationException;
++import org.apache.hadoop.hbase.reconfig.ReconfigureWatcher;
  import org.apache.hadoop.hbase.regionserver.Leases.LeaseStillHeldException;
  import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
-@@ -325,13 +326,17 @@
+ import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
+@@ -138,12 +141,13 @@
+ import org.apache.zookeeper.KeeperException;
+ 
+ import com.google.common.base.Function;
++import com.google.common.collect.Lists;
+ 
+ /**
+  * HRegionServer makes a set of HRegions available to clients. It checks in with
+  * the HMaster. There are many HRegionServers in a single HBase deployment.
+  */
+-public class HRegionServer implements HRegionInterface, HBaseRPCErrorHandler,
++public class HRegionServer extends ReconfigurableBase implements HRegionInterface, HBaseRPCErrorHandler,
+     Runnable, RegionServerServices, Server {
+   public static final Log LOG = LogFactory.getLog(HRegionServer.class);
+ 
+@@ -173,6 +177,8 @@
+   private FileSystem fs;
+   private Path rootDir;
+   private final Random rand = new Random();
++  //add by hongzhen.lm
++  private ReconfigureWatcher reconfigureWatcher;
+ 
+   /**
+    * Map of regions currently being served by this region server. Key is the
+@@ -202,9 +208,51 @@
+   // Leases
+   private Leases leases;
+ 
++  //read request counter for every map
++  private  Map<String,Integer> tableReadRequestMap=new ConcurrentHashMap<String,Integer>();
++  
++  //write request counter for every map
++  private  Map<String,Integer> tableWriteRequestMap=new ConcurrentHashMap<String,Integer>();
++  
++  //read request counter for every ip
++  private  Map<String,Integer> ipReadRequestMap=new ConcurrentHashMap<String,Integer>();
++  
++  //write request counter for every ip
++  private  Map<String,Integer> ipWriteRequestMap=new ConcurrentHashMap<String,Integer>();
++  
+   // Request counter
+   private volatile AtomicInteger requestCount = new AtomicInteger();
+-
++  
++  //ReadRequest counter
++  private volatile AtomicInteger readRequestCount = new AtomicInteger();
++  
++  //FailedReadRequest counter
++  private volatile AtomicInteger failedReadRequestCount = new AtomicInteger();
++    
++  //WriteRequest counter
++  private volatile AtomicInteger writeRequestCount = new AtomicInteger();
++  
++  //FailedWriteRequest counter
++  private volatile AtomicInteger failedWriteRequestCount = new AtomicInteger();
++  
++  //Time of ReadResponse
++  private volatile AtomicInteger readResponseTime = new AtomicInteger();
++    
++  //Time of WriteResponse
++  private volatile AtomicInteger writeResponseTime = new AtomicInteger();
++
++  //Data Size of ReadRequest
++  private volatile AtomicInteger readDataSize = new AtomicInteger();
++  
++  //Write Size of ReadRequest
++  private volatile AtomicInteger writeDataSize = new AtomicInteger();
++  
++  //memStoreHit  counter
++  private volatile AtomicInteger memStoreHitCount = new AtomicInteger();
++  
++  //memStoreMiss  counter
++  private volatile AtomicInteger memStoreMissCount = new AtomicInteger();
++  
+   // Info server. Default access so can be used by unit tests. REGIONSERVER
+   // is name of the webapp and the attribute name used stuffing this instance
+   // into web context.
+@@ -212,7 +260,8 @@
+ 
+   /** region server process name */
+   public static final String REGIONSERVER = "regionserver";
+-
++  /** reconfiguration test */
++  private static String hbase_regionServer_reconfig_test ="NO";
+   /*
+    * Space is reserved in HRS constructor and then released when aborting to
+    * recover from an OOME. See HBASE-706. TODO: Make this percentage of the heap
+@@ -255,6 +304,9 @@
+   // Cluster Status Tracker
+   private ClusterStatusTracker clusterStatusTracker;
+ 
++  // Log Splitting Worker
++  private SplitLogWorker splitLogWorker;
++
+   // A sleeper that sleeps for msgInterval.
+   private final Sleeper sleeper;
+ 
+@@ -325,13 +377,19 @@
        conf.get(HConstants.REGIONSERVER_PORT,
          Integer.toString(HConstants.DEFAULT_REGIONSERVER_PORT));
      HServerAddress address = new HServerAddress(addressStr);
@@ -7258,19 +8003,696 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/regionserver/HRegio
 +				address.getPort(), conf.getInt("hbase.regionserver.handler.count", 10),
 +				conf.getInt("hbase.regionserver.metahandler.count", 10),
 +				false, QOS_THRESHOLD);
-+    
++
++
++
      this.server.setErrorHandler(this);
      this.server.setQosFunction(new QosFunction());
  
-diff -uNr hbase-0.90.2/src/main/resources/hbase-webapps/master/master.jsp hbase-0.90.2-local/src/main/resources/hbase-webapps/master/master.jsp
---- hbase-0.90.2/src/main/resources/hbase-webapps/master/master.jsp	2011-03-28 04:50:35.000000000 +0800
-+++ hbase-0.90.2-local/src/main/resources/hbase-webapps/master/master.jsp	2011-06-24 17:03:28.000000000 +0800
-@@ -37,7 +37,7 @@
- <body>
- <a id="logo" href="http://wiki.apache.org/lucene-hadoop/Hbase"><img src="/static/hbase_logo_med.gif" alt="HBase Logo" title="HBase Logo" /></a>
- <h1 id="page_title">Master: <%=master.getMasterAddress().getHostname()%>:<%=master.getMasterAddress().getPort()%></h1>
--<p id="links_menu"><a href="/logs/">Local logs</a>, <a href="/stacks">Thread Dump</a>, <a href="/logLevel">Log Level</a></p>
-+<p id="links_menu"><a href="/logs/">Local logs</a>, <a href="/stacks">Thread Dump</a>, <a href="/logLevel">Log Level</a>,<a href="showgroup.jsp">Group Information</a></p>
+@@ -370,7 +428,7 @@
+           qosMap.put(m.getName(), p.priority());
+         }
+       }
+-      
++
+       annotatedQos = qosMap;
+     }
  
- <!-- Various warnings that cluster admins should be aware of -->
- <% if (JvmVersion.isBadJvmVersion()) { %>
+@@ -390,7 +448,7 @@
+ 
+       HBaseRPC.Invocation inv = (HBaseRPC.Invocation) from;
+       String methodName = inv.getMethodName();
+-      
++
+       Integer priorityByAnnotation = annotatedQos.get(methodName);
+       if (priorityByAnnotation != null) {
+         return priorityByAnnotation;
+@@ -460,6 +518,8 @@
+   private void initialize() throws IOException, InterruptedException {
+     try {
+       initializeZooKeeper();
++      this.fsLock = new ReentrantReadWriteLock(true); // fair locking
++      reconfigureWatcher = new ReconfigureWatcher(zooKeeper, this);
+       initializeThreads();
+       int nbBlocks = conf.getInt("hbase.regionserver.nbreservationblocks", 4);
+       for (int i = 0; i < nbBlocks; i++) {
+@@ -503,6 +563,11 @@
+     this.catalogTracker = new CatalogTracker(this.zooKeeper, this.connection,
+       this, this.conf.getInt("hbase.regionserver.catalog.timeout", Integer.MAX_VALUE));
+     catalogTracker.start();
++
++    // Create the log splitting worker and start it
++    this.splitLogWorker = new SplitLogWorker(this.zooKeeper,
++        this.getConfiguration(), this.getServerName());
++    splitLogWorker.start();
+   }
+ 
+   /**
+@@ -629,6 +694,9 @@
+     }
+     this.leases.closeAfterLeasesExpire();
+     this.server.stop();
++    if (this.splitLogWorker != null) {
++      splitLogWorker.stop();
++    }
+     if (this.infoServer != null) {
+       LOG.info("Stopping infoServer");
+       try {
+@@ -718,6 +786,16 @@
+   throws IOException {
+     this.serverInfo.setLoad(buildServerLoad());
+     this.requestCount.set(0);
++    this.readRequestCount.set(0);
++    this.readDataSize.set(0);
++    this.failedReadRequestCount.set(0);
++    this.readResponseTime.set(0);
++    this.writeRequestCount.set(0);
++    this.writeDataSize.set(0);
++    this.failedWriteRequestCount.set(0);
++    this.writeResponseTime.set(0);
++    this.memStoreHitCount.set(0);
++    this.memStoreMissCount.set(0);
+     addOutboundMsgs(outboundMessages);
+     HMsg [] msgs = null;
+     while (!this.stopped) {
+@@ -1141,6 +1219,21 @@
+   protected void metrics() {
+     this.metrics.regions.set(this.onlineRegions.size());
+     this.metrics.incrementRequests(this.requestCount.get());
++    this.metrics.incrementReadRequests(this.readRequestCount.get());
++    this.metrics.incrementReadDataSize(this.readDataSize.get());
++    this.metrics.incrementFailedReadRequests(this.failedReadRequestCount.get());
++    this.metrics.incrementWriteRequests(this.writeRequestCount.get());
++    this.metrics.incrementWriteDataSize(this.writeDataSize.get());
++    this.metrics.incrementFailedWriteRequests(this.failedWriteRequestCount.get());
++    this.metrics.incrementReadResponseTime(this.readResponseTime.get());
++    this.metrics.incrementWriteResponseTime(this.writeResponseTime.get());
++    this.metrics.aliveHandlerNum.set(this.server.getAliveHandlerNum());
++    this.metrics.aliveReaderNum.set(this.server.getAliveReaderNum());
++    this.metrics.handlerQueueSize.set(this.server.getHandlerQueueSize());
++    this.metrics.incrementMemStoreHitCount(this.memStoreHitCount.get());
++    this.metrics.incrementMemStoreMissCount(this.memStoreMissCount.get());
++    this.metrics.incrementRPCRequestCount(this.server.getRPCRequestCount());
++    this.metrics.incrementRPCRequestTime(this.server.getRPCRequestTime());
+     // Is this too expensive every three seconds getting a lock on onlineRegions
+     // and then per store carried? Can I make metrics be sloppier and avoid
+     // the synchronizations?
+@@ -1186,6 +1279,80 @@
+       percent = (int) (ratio * 100);
+       this.metrics.blockCacheHitCachingRatio.set(percent);
+     }
++    
++    this.updateTableMetrics();
++  }
++  
++  private void updateTableMetrics()
++  {
++	  Set<String> readTableSet=this.tableReadRequestMap.keySet();
++      for(String tableName:readTableSet)
++      {
++    	 int readRC=this.tableReadRequestMap.get(tableName);
++    	 if(this.metrics.tableReadRequestMap.containsKey(tableName))
++    	 {
++    		 this.metrics.tableReadRequestMap.get(tableName).inc(readRC);
++    	 }
++    	 else
++    	 {
++    		 MetricsIntervalInt tableMetric=new MetricsIntervalInt("readRequest_table_"+tableName, this.metrics.getRegistry());
++    		 tableMetric.inc(readRC);
++    		 this.metrics.tableReadRequestMap.put(tableName, tableMetric);
++    	 }
++      }
++      this.tableReadRequestMap.clear();
++
++      
++      Set<String> writeTableSet=this.tableWriteRequestMap.keySet();
++      for(String tableName:writeTableSet)
++      {
++    	 int writeRC=this.tableWriteRequestMap.get(tableName);
++    	 if(this.metrics.tableWriteRequestMap.containsKey(tableName))
++    	 {
++    		 this.metrics.tableWriteRequestMap.get(tableName).inc(writeRC);
++    	 }
++    	 else
++    	 {
++    		 MetricsIntervalInt tableMetric=new MetricsIntervalInt("writeRequest_table_"+tableName, this.metrics.getRegistry());
++    		 tableMetric.inc(writeRC);
++    		 this.metrics.tableWriteRequestMap.put(tableName, tableMetric);
++    	 }
++      }
++      this.tableWriteRequestMap.clear();
++      
++	  Set<String> readIpSet=this.ipReadRequestMap.keySet();
++      for(String ip:readIpSet)
++      {
++    	 int readRC=this.ipReadRequestMap.get(ip);
++    	 if(this.metrics.ipReadRequestMap.containsKey(ip))
++    	 {
++    		 this.metrics.ipReadRequestMap.get(ip).inc(readRC);
++    	 }
++    	 else
++    	 {
++    		 MetricsIntervalInt ipMetric=new MetricsIntervalInt("readRequest_IP_"+ip, this.metrics.getRegistry());
++    		 ipMetric.inc(readRC);
++    		 this.metrics.ipReadRequestMap.put(ip, ipMetric);
++    	 }
++      }
++      this.ipReadRequestMap.clear();
++      
++	  Set<String> writeIpSet=this.ipWriteRequestMap.keySet();
++      for(String ip:writeIpSet)
++      {
++    	 int writeRC=this.ipWriteRequestMap.get(ip);
++    	 if(this.metrics.ipWriteRequestMap.containsKey(ip))
++    	 {
++    		 this.metrics.ipWriteRequestMap.get(ip).inc(writeRC);
++    	 }
++    	 else
++    	 {
++    		 MetricsIntervalInt ipMetric=new MetricsIntervalInt("writeRequest_IP_"+ip, this.metrics.getRegistry());
++    		 ipMetric.inc(writeRC);
++    		 this.metrics.ipWriteRequestMap.put(ip, ipMetric);
++    	 }
++      }
++      this.ipWriteRequestMap.clear();
+   }
+ 
+   /**
+@@ -1496,6 +1663,16 @@
+     while (!stopped) {
+       try {
+         this.requestCount.set(0);
++        this.readRequestCount.set(0);
++        this.readDataSize.set(0);
++        this.failedReadRequestCount.set(0);
++        this.readResponseTime.set(0);
++        this.writeRequestCount.set(0);
++        this.writeDataSize.set(0);
++        this.failedWriteRequestCount.set(0);
++        this.writeResponseTime.set(0);
++        this.memStoreHitCount.set(0);
++        this.memStoreMissCount.set(0);
+         lastMsg = System.currentTimeMillis();
+         ZKUtil.setAddressAndWatch(zooKeeper,
+           ZKUtil.joinZNode(zooKeeper.rsZNode, ZKUtil.getNodeName(serverInfo)),
+@@ -1601,28 +1778,104 @@
+ 
+   public Result getClosestRowBefore(final byte[] regionName, final byte[] row,
+       final byte[] family) throws IOException {
++	  long start=System.currentTimeMillis();
+     checkOpen();
+     requestCount.incrementAndGet();
++    this.readRequestCount.incrementAndGet();
+     try {
+       // locate the region we're operating on
+       HRegion region = getRegion(regionName);
+       // ask the region for all the data
+ 
+       Result r = region.getClosestRowBefore(row, family);
++      if ( r == null )
++        return r;
++      String tableName=region.getTableDesc().getNameAsString();
++      if(tableReadRequestMap.containsKey(tableName))
++      {
++    	  int rc=tableReadRequestMap.get(tableName);
++    	  tableReadRequestMap.put(tableName, rc+1);
++      }
++      else
++      {
++    	  tableReadRequestMap.put(tableName, 1);
++      }
++      
++      
++      String ip=HBaseServer.getRemoteAddress();
++      if(ip!=null)
++      {
++    	  if(this.ipReadRequestMap.containsKey(ip))
++          {
++        	  int rc=ipReadRequestMap.get(ip);
++        	  ipReadRequestMap.put(ip, rc+1);
++          }
++          else
++          {
++        	  ipReadRequestMap.put(ip, 1);
++          }
++      }
++      
++      
++      this.memStoreHitCount.addAndGet(region.getMemStoreHitCount());
++      this.memStoreMissCount.addAndGet(region.getMemStoreMissCount());
++      long end=System.currentTimeMillis();
++      this.readResponseTime.addAndGet((int)(end-start));
++      this.readDataSize.addAndGet(r.toString().getBytes().length);
+       return r;
+     } catch (Throwable t) {
++    	this.failedReadRequestCount.incrementAndGet();
++    	long end=System.currentTimeMillis();
++        this.readResponseTime.addAndGet((int)(end-start));
+       throw convertThrowableToIOE(cleanup(t));
+     }
+   }
+ 
+   /** {@inheritDoc} */
+   public Result get(byte[] regionName, Get get) throws IOException {
++	long start=System.currentTimeMillis();  
+     checkOpen();
+     requestCount.incrementAndGet();
++    this.readRequestCount.incrementAndGet();
+     try {
+       HRegion region = getRegion(regionName);
+-      return region.get(get, getLockFromId(get.getLockId()));
++      Result r = region.get(get, getLockFromId(get.getLockId()));
++      String tableName=region.getTableDesc().getNameAsString();
++      if(tableReadRequestMap.containsKey(tableName))
++      {
++    	  int rc=tableReadRequestMap.get(tableName);
++    	  tableReadRequestMap.put(tableName, rc+1);
++      }
++      else
++      {
++    	  tableReadRequestMap.put(tableName, 1);
++      }
++      
++      String ip=HBaseServer.getRemoteAddress();
++      if(ip!=null)
++      {
++    	  if(this.ipReadRequestMap.containsKey(ip))
++          {
++        	  int rc=ipReadRequestMap.get(ip);
++        	  ipReadRequestMap.put(ip, rc+1);
++          }
++          else
++          {
++        	  ipReadRequestMap.put(ip, 1);
++          }
++      }
++      
++      
++      this.memStoreHitCount.addAndGet(region.getMemStoreHitCount());
++      this.memStoreMissCount.addAndGet(region.getMemStoreMissCount());
++      long end=System.currentTimeMillis();
++      this.readResponseTime.addAndGet((int)(end-start));
++      this.readDataSize.addAndGet(r.toString().getBytes().length);
++      return r;
+     } catch (Throwable t) {
++      this.failedReadRequestCount.incrementAndGet();
++      long end=System.currentTimeMillis();
++      this.readResponseTime.addAndGet((int)(end-start));
+       throw convertThrowableToIOE(cleanup(t));
+     }
+   }
+@@ -1643,9 +1896,10 @@
+     if (put.getRow() == null) {
+       throw new IllegalArgumentException("update has null row");
+     }
+-
++    long start=System.currentTimeMillis();
+     checkOpen();
+     this.requestCount.incrementAndGet();
++    this.writeRequestCount.incrementAndGet();
+     HRegion region = getRegion(regionName);
+     try {
+       if (!region.getRegionInfo().isMetaTable()) {
+@@ -1653,13 +1907,46 @@
+       }
+       boolean writeToWAL = put.getWriteToWAL();
+       region.put(put, getLockFromId(put.getLockId()), writeToWAL);
++      String tableName=region.getTableDesc().getNameAsString();
++      if(tableWriteRequestMap.containsKey(tableName))
++      {
++    	  int wc=tableWriteRequestMap.get(tableName);
++    	  tableWriteRequestMap.put(tableName, wc+1);
++      }
++      else
++      {
++    	  tableWriteRequestMap.put(tableName, 1);
++      }
++      
++      String ip=HBaseServer.getRemoteAddress();
++      if(ip!=null)
++      {
++    	  if(this.ipWriteRequestMap.containsKey(ip))
++          {
++        	  int wc=ipWriteRequestMap.get(ip);
++        	  ipWriteRequestMap.put(ip, wc+1);
++          }
++          else
++          {
++        	  ipWriteRequestMap.put(ip, 1);
++          }
++      }
++      
++      long end = System.currentTimeMillis();
++      this.writeDataSize.addAndGet(put.toString().getBytes().length);
++      this.writeResponseTime.addAndGet((int)(end-start));
+     } catch (Throwable t) {
++      this.failedWriteRequestCount.incrementAndGet();
++      long end = System.currentTimeMillis();
++      this.writeResponseTime.addAndGet((int)(end-start));
+       throw convertThrowableToIOE(cleanup(t));
+     }
+   }
+ 
+   public int put(final byte[] regionName, final List<Put> puts)
+       throws IOException {
++	
++	long start=System.currentTimeMillis();
+     checkOpen();
+     HRegion region = null;
+     try {
+@@ -1678,7 +1965,37 @@
+       }
+ 
+       this.requestCount.addAndGet(puts.size());
++      this.writeRequestCount.addAndGet(puts.size());
++      for(Put p:puts)
++    	  this.writeDataSize.addAndGet(p.toString().getBytes().length);
+       OperationStatusCode[] codes = region.put(putsWithLocks);
++      String tableName=region.getTableDesc().getNameAsString();
++      if(tableWriteRequestMap.containsKey(tableName))
++      {
++    	  int wc=tableWriteRequestMap.get(tableName);
++    	  tableWriteRequestMap.put(tableName, wc+puts.size());
++      }
++      else
++      {
++    	  tableWriteRequestMap.put(tableName, puts.size());
++      }
++      
++      String ip=HBaseServer.getRemoteAddress();
++      if(ip!=null)
++      {
++    	  if(this.ipWriteRequestMap.containsKey(ip))
++          {
++        	  int wc=ipWriteRequestMap.get(ip);
++        	  ipWriteRequestMap.put(ip, wc+puts.size());
++          }
++          else
++          {
++        	  ipWriteRequestMap.put(ip, puts.size());
++          }
++      }
++      
++      long end=System.currentTimeMillis();
++      this.writeResponseTime.addAndGet((int)(end-start));
+       for (i = 0; i < codes.length; i++) {
+         if (codes[i] != OperationStatusCode.SUCCESS) {
+           return i;
+@@ -1686,6 +2003,9 @@
+       }
+       return -1;
+     } catch (Throwable t) {
++      this.failedWriteRequestCount.incrementAndGet();
++      long end=System.currentTimeMillis();
++      this.writeResponseTime.addAndGet((int)(end-start));
+       throw convertThrowableToIOE(cleanup(t));
+     }
+   }
+@@ -1763,6 +2083,7 @@
+     requestCount.incrementAndGet();
+     try {
+       HRegion r = getRegion(regionName);
++      
+       return addScanner(r.getScanner(scan));
+     } catch (Throwable t) {
+       throw convertThrowableToIOE(cleanup(t, "Failed openScanner"));
+@@ -1786,8 +2107,9 @@
+     return res[0];
+   }
+ 
+-  public Result[] next(final long scannerId, int nbRows) throws IOException {
+-    try {
++  public Result[] next(final long scannerId, int nbRows) throws IOException {  
++	  long start=System.currentTimeMillis();
++	  try {
+       String scannerName = String.valueOf(scannerId);
+       InternalScanner s = this.scanners.get(scannerName);
+       if (s == null) {
+@@ -1810,22 +2132,58 @@
+       List<Result> results = new ArrayList<Result>(nbRows);
+       long currentScanResultSize = 0;
+       List<KeyValue> values = new ArrayList<KeyValue>();
++      int readRequestAdded=0;
+       for (int i = 0; i < nbRows
+           && currentScanResultSize < maxScannerResultSize; i++) {
+         requestCount.incrementAndGet();
++        this.readRequestCount.incrementAndGet();
++        readRequestAdded++;
+         // Collect values to be returned here
+         boolean moreRows = s.next(values);
+         if (!values.isEmpty()) {
+           for (KeyValue kv : values) {
+             currentScanResultSize += kv.heapSize();
+           }
+-          results.add(new Result(values));
++          Result res=new Result(values);
++          results.add(res);
++          this.readDataSize.addAndGet(res.toString().getBytes().length);
+         }
+         if (!moreRows) {
+           break;
+         }
+         values.clear();
++        long end=System.currentTimeMillis();
++        this.readResponseTime.addAndGet((int)(end-start));
++        start=end;
++      }
++      String tableName=((HRegion.RegionScanner)s).getRegionName().getTableDesc().getNameAsString();
++      if(tableReadRequestMap.containsKey(tableName))
++      {
++    	  int rc=tableReadRequestMap.get(tableName);
++    	  tableReadRequestMap.put(tableName, rc+readRequestAdded);
++      }
++      else
++      {
++    	  tableReadRequestMap.put(tableName, readRequestAdded);
+       }
++      
++      String ip=HBaseServer.getRemoteAddress();
++      if(ip!=null)
++      {
++    	  if(this.ipReadRequestMap.containsKey(ip))
++          {
++        	  int rc=ipReadRequestMap.get(ip);
++        	  ipReadRequestMap.put(ip, rc+readRequestAdded);
++          }
++          else
++          {
++        	  ipReadRequestMap.put(ip, readRequestAdded);
++          }
++      }
++      
++      
++      this.memStoreHitCount.addAndGet(((HRegion.RegionScanner)s).getMemStoreHitCount());
++      this.memStoreMissCount.addAndGet(((HRegion.RegionScanner)s).getMemStoreMissCount());
+       // Below is an ugly hack where we cast the InternalScanner to be a
+       // HRegion.RegionScanner. The alternative is to change InternalScanner
+       // interface but its used everywhere whereas we just need a bit of info
+@@ -1839,6 +2197,9 @@
+         String scannerName = String.valueOf(scannerId);
+         this.scanners.remove(scannerName);
+       }
++      this.failedReadRequestCount.incrementAndGet();
++      long end=System.currentTimeMillis();
++      this.readResponseTime.addAndGet((int)(end-start));
+       throw convertThrowableToIOE(cleanup(t));
+     }
+   }
+@@ -1887,17 +2248,50 @@
+   //
+   public void delete(final byte[] regionName, final Delete delete)
+       throws IOException {
++	  long start=System.currentTimeMillis();
+     checkOpen();
+     try {
+       boolean writeToWAL = true;
+       this.requestCount.incrementAndGet();
++      this.writeRequestCount.incrementAndGet();
+       HRegion region = getRegion(regionName);
+       if (!region.getRegionInfo().isMetaTable()) {
+         this.cacheFlusher.reclaimMemStoreMemory();
+       }
+       Integer lid = getLockFromId(delete.getLockId());
+       region.delete(delete, lid, writeToWAL);
++      String tableName=region.getTableDesc().getNameAsString();
++      if(tableWriteRequestMap.containsKey(tableName))
++      {
++    	  int wc=tableWriteRequestMap.get(tableName);
++    	  tableWriteRequestMap.put(tableName, wc+1);
++      }
++      else
++      {
++    	  tableWriteRequestMap.put(tableName, 1);
++      }
++      
++      String ip=HBaseServer.getRemoteAddress();
++      if(ip!=null)
++      {
++    	  if(this.ipWriteRequestMap.containsKey(ip))
++          {
++        	  int wc=ipWriteRequestMap.get(ip);
++        	  ipWriteRequestMap.put(ip, wc+1);
++          }
++          else
++          {
++        	  ipWriteRequestMap.put(ip, 1);
++          }
++      }
++      
++      long end=System.currentTimeMillis();
++      this.writeDataSize.addAndGet(delete.toString().getBytes().length);
++      this.writeResponseTime.addAndGet((int)(end-start));
+     } catch (Throwable t) {
++      this.failedWriteRequestCount.incrementAndGet();
++      long end=System.currentTimeMillis();
++      this.writeResponseTime.addAndGet((int)(end-start));
+       throw convertThrowableToIOE(cleanup(t));
+     }
+   }
+@@ -2279,6 +2673,56 @@
+   public AtomicInteger getRequestCount() {
+     return this.requestCount;
+   }
++  
++  /** @return the readrequest count */
++  public AtomicInteger getReadRequestCount() {
++    return this.readRequestCount;
++  }
++  
++  /** @return the read data size */
++  public AtomicInteger getReadDataSize() {
++    return this.readDataSize;
++  }
++  
++  /** @return the failedreadrequest count */
++  public AtomicInteger getFailedReadRequestCount() {
++    return this.failedReadRequestCount;
++  }
++  
++  /** @return the ReadResponseTime */
++  public AtomicInteger getReadResponseTimeCount() {
++    return this.readResponseTime;
++  }
++  
++  /** @return the writerequest count */
++  public AtomicInteger getWriteRequestCount() {
++    return this.writeRequestCount;
++  }
++  
++  /** @return the write data size */
++  public AtomicInteger getWriteDataSize() {
++    return this.writeDataSize;
++  }
++  
++  /** @return the failedwriterequest count */
++  public AtomicInteger getFailedWriteRequestCount() {
++    return this.failedWriteRequestCount;
++  }
++  
++  /** @return the WriteResponseTime  */
++  public AtomicInteger getWriteResponseTimeCount() {
++    return this.writeResponseTime;
++  }
++  
++  /** @return the memStoreHitCount  */
++  public AtomicInteger getMemStoreHitCount() {
++    return this.memStoreHitCount;
++  }
++  
++  /** @return the memStoreMissCount  */
++  public AtomicInteger getMemStoreMissCount() {
++    return this.memStoreMissCount;
++  }
+ 
+   /** @return reference to FlushRequester */
+   public FlushRequester getFlushRequester() {
+@@ -2604,6 +3048,7 @@
+     return this.compactSplitThread;
+   }
+ 
++
+   //
+   // Main program and support routines
+   //
+@@ -2664,7 +3109,40 @@
+     this.replicationHandler.replicateLogEntries(entries);
+   }
+ 
++  /*
++   * add by hongzhen.lm
++   * */
++    private ReentrantReadWriteLock fsLock;
++
++    // utility methods to acquire and release read lock and write lock
++    void readLock() {
++        this.fsLock.readLock().lock();
++    }
+ 
++    void readUnlock() {
++        this.fsLock.readLock().unlock();
++    }
++
++    void writeLock() {
++        this.fsLock.writeLock().lock();
++    }
++
++    void writeUnlock() {
++        this.fsLock.writeLock().unlock();
++    }
++
++    boolean hasWriteLock() {
++        return this.fsLock.isWriteLockedByCurrentThread();
++    }
++
++    boolean hasReadLock() {
++        return this.fsLock.getReadHoldCount() > 0;
++    }
++
++    boolean hasReadOrWriteLock() {
++        return hasReadLock() || hasWriteLock();
++    }
++    
+   /**
+    * @see org.apache.hadoop.hbase.regionserver.HRegionServerCommandLine
+    */
+@@ -2676,4 +3154,40 @@
+ 
+     new HRegionServerCommandLine(regionServerClass).doMain(args);
+   }
++  /**
++   * @return
++   */
++  @Override
++    public Collection<String> getReconfigurableProperties() {
++        // TODO Auto-generated method stub
++        return Arrays.asList(HConstants.HBASE_REGIONSERVER_RECONFIG_TEST);
++    }
++
++  /**
++   * @param property
++   * @param newVal
++   * @throws ReconfigurationException
++   */
++  @Override
++    protected void reconfigurePropertyImpl(String property, String newVal) throws ReconfigurationException {
++        HRegionServer.LOG.info("[notice] HRegionServer start reconfig itself from  config files");
++        if (isPropertyReconfigurable(property)) {
++            writeLock();
++            try {
++                if (property.equals(HConstants.HBASE_REGIONSERVER_RECONFIG_TEST)) {
++                    HRegionServer.LOG.info("[notice] hbase_region_server_reconfig_test oraginal: " + hbase_regionServer_reconfig_test + " and update:" + newVal);
++                    hbase_regionServer_reconfig_test = newVal;
++                } else {
++                    throw new ReconfigurationException(property, newVal, getConf().get(property));
++                }
++
++            } catch (NumberFormatException e) {
++                throw new ReconfigurationException(property, newVal, getConf().get(property));
++            } finally {
++
++                writeUnlock();
++            }
++        }
++
++    }
+ }
