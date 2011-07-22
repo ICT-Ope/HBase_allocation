@@ -1,7 +1,9 @@
+This the implementation of HBASE-4120.
 The HBase allocation tool is designed to help users manage cluster resource among different application and tables.
 When we manage a large scale of HBase cluster with many applications running on it, there will be lots of problems. In Taobao[1] there is a cluster for many departments to test their applications performance, these applications are based on HBase. With one cluster which have 12 servers, there will be only one application running exclusively on this server, and many other applications must wait until the previous test finished.
 After we add allocation manage function to the cluster, applications can share the cluster and run concurrently. Also if the Test Engineer wants to make sure there is no interference, he/she can move out other tables from this group.
 In groups we use table priority to allocate resource, when system is busy; we can make sure high-priority tables are not affected lower-priority tables
- 
+
+
  [1] Taobao (simplified Chinese: 淘宝网; traditional Chinese: 淘寶網; pinyin: Táobǎowǎng) is a Chinese language web site for online shopping, similar to eBay, Rakuten and Amazon,[2] operated in the People's Republic of China by Alibaba Group.In 2009 Taobao saw advertising revenues of $220 Million.
 
