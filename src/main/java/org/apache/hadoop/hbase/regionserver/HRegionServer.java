@@ -30,11 +30,11 @@ import java.lang.reflect.Method;
 import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -51,6 +51,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -76,6 +77,7 @@ import org.apache.hadoop.hbase.Stoppable;
 import org.apache.hadoop.hbase.UnknownRowLockException;
 import org.apache.hadoop.hbase.UnknownScannerException;
 import org.apache.hadoop.hbase.YouAreDeadException;
+import org.apache.hadoop.hbase.HConstants.OperationStatusCode;
 import org.apache.hadoop.hbase.catalog.CatalogTracker;
 import org.apache.hadoop.hbase.catalog.MetaEditor;
 import org.apache.hadoop.hbase.catalog.RootLocationEditor;
@@ -106,10 +108,6 @@ import org.apache.hadoop.hbase.ipc.HMasterRegionInterface;
 import org.apache.hadoop.hbase.ipc.HRegionInterface;
 import org.apache.hadoop.hbase.ipc.ScheduleHBaseServer;
 import org.apache.hadoop.hbase.ipc.ServerNotRunningException;
-import org.apache.hadoop.hbase.metrics.MetricsIntervalInt;
-import org.apache.hadoop.hbase.reconfig.ReconfigurableBase;
-import org.apache.hadoop.hbase.reconfig.ReconfigurationException;
-import org.apache.hadoop.hbase.reconfig.ReconfigureWatcher;
 import org.apache.hadoop.hbase.regionserver.Leases.LeaseStillHeldException;
 import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
@@ -141,13 +139,12 @@ import org.apache.hadoop.net.DNS;
 import org.apache.zookeeper.KeeperException;
 
 import com.google.common.base.Function;
-import com.google.common.collect.Lists;
 
 /**
  * HRegionServer makes a set of HRegions available to clients. It checks in with
  * the HMaster. There are many HRegionServers in a single HBase deployment.
  */
-public class HRegionServer extends ReconfigurableBase implements HRegionInterface, HBaseRPCErrorHandler,
+public class HRegionServer implements HRegionInterface, HBaseRPCErrorHandler,
     Runnable, RegionServerServices, Server {
   public static final Log LOG = LogFactory.getLog(HRegionServer.class);
 
@@ -177,8 +174,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
   private FileSystem fs;
   private Path rootDir;
   private final Random rand = new Random();
-  //add by hongzhen.lm
-  private ReconfigureWatcher reconfigureWatcher;
 
   /**
    * Map of regions currently being served by this region server. Key is the
@@ -208,51 +203,9 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
   // Leases
   private Leases leases;
 
-  //read request counter for every map
-  private  Map<String,Integer> tableReadRequestMap=new ConcurrentHashMap<String,Integer>();
-  
-  //write request counter for every map
-  private  Map<String,Integer> tableWriteRequestMap=new ConcurrentHashMap<String,Integer>();
-  
-  //read request counter for every ip
-  private  Map<String,Integer> ipReadRequestMap=new ConcurrentHashMap<String,Integer>();
-  
-  //write request counter for every ip
-  private  Map<String,Integer> ipWriteRequestMap=new ConcurrentHashMap<String,Integer>();
-  
   // Request counter
   private volatile AtomicInteger requestCount = new AtomicInteger();
-  
-  //ReadRequest counter
-  private volatile AtomicInteger readRequestCount = new AtomicInteger();
-  
-  //FailedReadRequest counter
-  private volatile AtomicInteger failedReadRequestCount = new AtomicInteger();
-    
-  //WriteRequest counter
-  private volatile AtomicInteger writeRequestCount = new AtomicInteger();
-  
-  //FailedWriteRequest counter
-  private volatile AtomicInteger failedWriteRequestCount = new AtomicInteger();
-  
-  //Time of ReadResponse
-  private volatile AtomicInteger readResponseTime = new AtomicInteger();
-    
-  //Time of WriteResponse
-  private volatile AtomicInteger writeResponseTime = new AtomicInteger();
 
-  //Data Size of ReadRequest
-  private volatile AtomicInteger readDataSize = new AtomicInteger();
-  
-  //Write Size of ReadRequest
-  private volatile AtomicInteger writeDataSize = new AtomicInteger();
-  
-  //memStoreHit  counter
-  private volatile AtomicInteger memStoreHitCount = new AtomicInteger();
-  
-  //memStoreMiss  counter
-  private volatile AtomicInteger memStoreMissCount = new AtomicInteger();
-  
   // Info server. Default access so can be used by unit tests. REGIONSERVER
   // is name of the webapp and the attribute name used stuffing this instance
   // into web context.
@@ -260,8 +213,7 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
 
   /** region server process name */
   public static final String REGIONSERVER = "regionserver";
-  /** reconfiguration test */
-  private static String hbase_regionServer_reconfig_test ="NO";
+
   /*
    * Space is reserved in HRS constructor and then released when aborting to
    * recover from an OOME. See HBASE-706. TODO: Make this percentage of the heap
@@ -303,9 +255,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
 
   // Cluster Status Tracker
   private ClusterStatusTracker clusterStatusTracker;
-
-  // Log Splitting Worker
-  private SplitLogWorker splitLogWorker;
 
   // A sleeper that sleeps for msgInterval.
   private final Sleeper sleeper;
@@ -377,19 +326,20 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
       conf.get(HConstants.REGIONSERVER_PORT,
         Integer.toString(HConstants.DEFAULT_REGIONSERVER_PORT));
     HServerAddress address = new HServerAddress(addressStr);
-    /**
-     * To enable the schedule function of table with priorities
-     */
     this.server = new ScheduleHBaseServer(this,
-    			new Class<?>[]{HRegionInterface.class, HBaseRPCErrorHandler.class,
-    	        OnlineRegions.class},conf,
-				address.getBindAddress(),
-				address.getPort(), conf.getInt("hbase.regionserver.handler.count", 10),
-				conf.getInt("hbase.regionserver.metahandler.count", 10),
-				false, QOS_THRESHOLD);
-
-
-
+			new Class<?>[]{HRegionInterface.class, HBaseRPCErrorHandler.class,
+	        OnlineRegions.class},conf,
+			address.getBindAddress(),
+			address.getPort(), conf.getInt("hbase.regionserver.handler.count", 10),
+			conf.getInt("hbase.regionserver.metahandler.count", 10),
+			false, QOS_THRESHOLD);
+//    this.server = HBaseRPC.getServer(this,
+//        new Class<?>[]{HRegionInterface.class, HBaseRPCErrorHandler.class,
+//        OnlineRegions.class},
+//        address.getBindAddress(),
+//      address.getPort(), conf.getInt("hbase.regionserver.handler.count", 10),
+//        conf.getInt("hbase.regionserver.metahandler.count", 10),
+//        false, conf, QOS_THRESHOLD);
     this.server.setErrorHandler(this);
     this.server.setQosFunction(new QosFunction());
 
@@ -428,7 +378,7 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
           qosMap.put(m.getName(), p.priority());
         }
       }
-
+      
       annotatedQos = qosMap;
     }
 
@@ -448,7 +398,7 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
 
       HBaseRPC.Invocation inv = (HBaseRPC.Invocation) from;
       String methodName = inv.getMethodName();
-
+      
       Integer priorityByAnnotation = annotatedQos.get(methodName);
       if (priorityByAnnotation != null) {
         return priorityByAnnotation;
@@ -518,8 +468,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
   private void initialize() throws IOException, InterruptedException {
     try {
       initializeZooKeeper();
-      this.fsLock = new ReentrantReadWriteLock(true); // fair locking
-      reconfigureWatcher = new ReconfigureWatcher(zooKeeper, this);
       initializeThreads();
       int nbBlocks = conf.getInt("hbase.regionserver.nbreservationblocks", 4);
       for (int i = 0; i < nbBlocks; i++) {
@@ -563,11 +511,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
     this.catalogTracker = new CatalogTracker(this.zooKeeper, this.connection,
       this, this.conf.getInt("hbase.regionserver.catalog.timeout", Integer.MAX_VALUE));
     catalogTracker.start();
-
-    // Create the log splitting worker and start it
-    this.splitLogWorker = new SplitLogWorker(this.zooKeeper,
-        this.getConfiguration(), this.getServerName());
-    splitLogWorker.start();
   }
 
   /**
@@ -694,9 +637,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
     }
     this.leases.closeAfterLeasesExpire();
     this.server.stop();
-    if (this.splitLogWorker != null) {
-      splitLogWorker.stop();
-    }
     if (this.infoServer != null) {
       LOG.info("Stopping infoServer");
       try {
@@ -786,16 +726,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
   throws IOException {
     this.serverInfo.setLoad(buildServerLoad());
     this.requestCount.set(0);
-    this.readRequestCount.set(0);
-    this.readDataSize.set(0);
-    this.failedReadRequestCount.set(0);
-    this.readResponseTime.set(0);
-    this.writeRequestCount.set(0);
-    this.writeDataSize.set(0);
-    this.failedWriteRequestCount.set(0);
-    this.writeResponseTime.set(0);
-    this.memStoreHitCount.set(0);
-    this.memStoreMissCount.set(0);
     addOutboundMsgs(outboundMessages);
     HMsg [] msgs = null;
     while (!this.stopped) {
@@ -1219,21 +1149,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
   protected void metrics() {
     this.metrics.regions.set(this.onlineRegions.size());
     this.metrics.incrementRequests(this.requestCount.get());
-    this.metrics.incrementReadRequests(this.readRequestCount.get());
-    this.metrics.incrementReadDataSize(this.readDataSize.get());
-    this.metrics.incrementFailedReadRequests(this.failedReadRequestCount.get());
-    this.metrics.incrementWriteRequests(this.writeRequestCount.get());
-    this.metrics.incrementWriteDataSize(this.writeDataSize.get());
-    this.metrics.incrementFailedWriteRequests(this.failedWriteRequestCount.get());
-    this.metrics.incrementReadResponseTime(this.readResponseTime.get());
-    this.metrics.incrementWriteResponseTime(this.writeResponseTime.get());
-    this.metrics.aliveHandlerNum.set(this.server.getAliveHandlerNum());
-    this.metrics.aliveReaderNum.set(this.server.getAliveReaderNum());
-    this.metrics.handlerQueueSize.set(this.server.getHandlerQueueSize());
-    this.metrics.incrementMemStoreHitCount(this.memStoreHitCount.get());
-    this.metrics.incrementMemStoreMissCount(this.memStoreMissCount.get());
-    this.metrics.incrementRPCRequestCount(this.server.getRPCRequestCount());
-    this.metrics.incrementRPCRequestTime(this.server.getRPCRequestTime());
     // Is this too expensive every three seconds getting a lock on onlineRegions
     // and then per store carried? Can I make metrics be sloppier and avoid
     // the synchronizations?
@@ -1279,80 +1194,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
       percent = (int) (ratio * 100);
       this.metrics.blockCacheHitCachingRatio.set(percent);
     }
-    
-    this.updateTableMetrics();
-  }
-  
-  private void updateTableMetrics()
-  {
-	  Set<String> readTableSet=this.tableReadRequestMap.keySet();
-      for(String tableName:readTableSet)
-      {
-    	 int readRC=this.tableReadRequestMap.get(tableName);
-    	 if(this.metrics.tableReadRequestMap.containsKey(tableName))
-    	 {
-    		 this.metrics.tableReadRequestMap.get(tableName).inc(readRC);
-    	 }
-    	 else
-    	 {
-    		 MetricsIntervalInt tableMetric=new MetricsIntervalInt("readRequest_table_"+tableName, this.metrics.getRegistry());
-    		 tableMetric.inc(readRC);
-    		 this.metrics.tableReadRequestMap.put(tableName, tableMetric);
-    	 }
-      }
-      this.tableReadRequestMap.clear();
-
-      
-      Set<String> writeTableSet=this.tableWriteRequestMap.keySet();
-      for(String tableName:writeTableSet)
-      {
-    	 int writeRC=this.tableWriteRequestMap.get(tableName);
-    	 if(this.metrics.tableWriteRequestMap.containsKey(tableName))
-    	 {
-    		 this.metrics.tableWriteRequestMap.get(tableName).inc(writeRC);
-    	 }
-    	 else
-    	 {
-    		 MetricsIntervalInt tableMetric=new MetricsIntervalInt("writeRequest_table_"+tableName, this.metrics.getRegistry());
-    		 tableMetric.inc(writeRC);
-    		 this.metrics.tableWriteRequestMap.put(tableName, tableMetric);
-    	 }
-      }
-      this.tableWriteRequestMap.clear();
-      
-	  Set<String> readIpSet=this.ipReadRequestMap.keySet();
-      for(String ip:readIpSet)
-      {
-    	 int readRC=this.ipReadRequestMap.get(ip);
-    	 if(this.metrics.ipReadRequestMap.containsKey(ip))
-    	 {
-    		 this.metrics.ipReadRequestMap.get(ip).inc(readRC);
-    	 }
-    	 else
-    	 {
-    		 MetricsIntervalInt ipMetric=new MetricsIntervalInt("readRequest_IP_"+ip, this.metrics.getRegistry());
-    		 ipMetric.inc(readRC);
-    		 this.metrics.ipReadRequestMap.put(ip, ipMetric);
-    	 }
-      }
-      this.ipReadRequestMap.clear();
-      
-	  Set<String> writeIpSet=this.ipWriteRequestMap.keySet();
-      for(String ip:writeIpSet)
-      {
-    	 int writeRC=this.ipWriteRequestMap.get(ip);
-    	 if(this.metrics.ipWriteRequestMap.containsKey(ip))
-    	 {
-    		 this.metrics.ipWriteRequestMap.get(ip).inc(writeRC);
-    	 }
-    	 else
-    	 {
-    		 MetricsIntervalInt ipMetric=new MetricsIntervalInt("writeRequest_IP_"+ip, this.metrics.getRegistry());
-    		 ipMetric.inc(writeRC);
-    		 this.metrics.ipWriteRequestMap.put(ip, ipMetric);
-    	 }
-      }
-      this.ipWriteRequestMap.clear();
   }
 
   /**
@@ -1663,16 +1504,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
     while (!stopped) {
       try {
         this.requestCount.set(0);
-        this.readRequestCount.set(0);
-        this.readDataSize.set(0);
-        this.failedReadRequestCount.set(0);
-        this.readResponseTime.set(0);
-        this.writeRequestCount.set(0);
-        this.writeDataSize.set(0);
-        this.failedWriteRequestCount.set(0);
-        this.writeResponseTime.set(0);
-        this.memStoreHitCount.set(0);
-        this.memStoreMissCount.set(0);
         lastMsg = System.currentTimeMillis();
         ZKUtil.setAddressAndWatch(zooKeeper,
           ZKUtil.joinZNode(zooKeeper.rsZNode, ZKUtil.getNodeName(serverInfo)),
@@ -1778,104 +1609,28 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
 
   public Result getClosestRowBefore(final byte[] regionName, final byte[] row,
       final byte[] family) throws IOException {
-	  long start=System.currentTimeMillis();
     checkOpen();
     requestCount.incrementAndGet();
-    this.readRequestCount.incrementAndGet();
     try {
       // locate the region we're operating on
       HRegion region = getRegion(regionName);
       // ask the region for all the data
 
       Result r = region.getClosestRowBefore(row, family);
-      if ( r == null )
-        return r;
-      String tableName=region.getTableDesc().getNameAsString();
-      if(tableReadRequestMap.containsKey(tableName))
-      {
-    	  int rc=tableReadRequestMap.get(tableName);
-    	  tableReadRequestMap.put(tableName, rc+1);
-      }
-      else
-      {
-    	  tableReadRequestMap.put(tableName, 1);
-      }
-      
-      
-      String ip=HBaseServer.getRemoteAddress();
-      if(ip!=null)
-      {
-    	  if(this.ipReadRequestMap.containsKey(ip))
-          {
-        	  int rc=ipReadRequestMap.get(ip);
-        	  ipReadRequestMap.put(ip, rc+1);
-          }
-          else
-          {
-        	  ipReadRequestMap.put(ip, 1);
-          }
-      }
-      
-      
-      this.memStoreHitCount.addAndGet(region.getMemStoreHitCount());
-      this.memStoreMissCount.addAndGet(region.getMemStoreMissCount());
-      long end=System.currentTimeMillis();
-      this.readResponseTime.addAndGet((int)(end-start));
-      this.readDataSize.addAndGet(r.toString().getBytes().length);
       return r;
     } catch (Throwable t) {
-    	this.failedReadRequestCount.incrementAndGet();
-    	long end=System.currentTimeMillis();
-        this.readResponseTime.addAndGet((int)(end-start));
       throw convertThrowableToIOE(cleanup(t));
     }
   }
 
   /** {@inheritDoc} */
   public Result get(byte[] regionName, Get get) throws IOException {
-	long start=System.currentTimeMillis();  
     checkOpen();
     requestCount.incrementAndGet();
-    this.readRequestCount.incrementAndGet();
     try {
       HRegion region = getRegion(regionName);
-      Result r = region.get(get, getLockFromId(get.getLockId()));
-      String tableName=region.getTableDesc().getNameAsString();
-      if(tableReadRequestMap.containsKey(tableName))
-      {
-    	  int rc=tableReadRequestMap.get(tableName);
-    	  tableReadRequestMap.put(tableName, rc+1);
-      }
-      else
-      {
-    	  tableReadRequestMap.put(tableName, 1);
-      }
-      
-      String ip=HBaseServer.getRemoteAddress();
-      if(ip!=null)
-      {
-    	  if(this.ipReadRequestMap.containsKey(ip))
-          {
-        	  int rc=ipReadRequestMap.get(ip);
-        	  ipReadRequestMap.put(ip, rc+1);
-          }
-          else
-          {
-        	  ipReadRequestMap.put(ip, 1);
-          }
-      }
-      
-      
-      this.memStoreHitCount.addAndGet(region.getMemStoreHitCount());
-      this.memStoreMissCount.addAndGet(region.getMemStoreMissCount());
-      long end=System.currentTimeMillis();
-      this.readResponseTime.addAndGet((int)(end-start));
-      this.readDataSize.addAndGet(r.toString().getBytes().length);
-      return r;
+      return region.get(get, getLockFromId(get.getLockId()));
     } catch (Throwable t) {
-      this.failedReadRequestCount.incrementAndGet();
-      long end=System.currentTimeMillis();
-      this.readResponseTime.addAndGet((int)(end-start));
       throw convertThrowableToIOE(cleanup(t));
     }
   }
@@ -1896,10 +1651,9 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
     if (put.getRow() == null) {
       throw new IllegalArgumentException("update has null row");
     }
-    long start=System.currentTimeMillis();
+
     checkOpen();
     this.requestCount.incrementAndGet();
-    this.writeRequestCount.incrementAndGet();
     HRegion region = getRegion(regionName);
     try {
       if (!region.getRegionInfo().isMetaTable()) {
@@ -1907,46 +1661,13 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
       }
       boolean writeToWAL = put.getWriteToWAL();
       region.put(put, getLockFromId(put.getLockId()), writeToWAL);
-      String tableName=region.getTableDesc().getNameAsString();
-      if(tableWriteRequestMap.containsKey(tableName))
-      {
-    	  int wc=tableWriteRequestMap.get(tableName);
-    	  tableWriteRequestMap.put(tableName, wc+1);
-      }
-      else
-      {
-    	  tableWriteRequestMap.put(tableName, 1);
-      }
-      
-      String ip=HBaseServer.getRemoteAddress();
-      if(ip!=null)
-      {
-    	  if(this.ipWriteRequestMap.containsKey(ip))
-          {
-        	  int wc=ipWriteRequestMap.get(ip);
-        	  ipWriteRequestMap.put(ip, wc+1);
-          }
-          else
-          {
-        	  ipWriteRequestMap.put(ip, 1);
-          }
-      }
-      
-      long end = System.currentTimeMillis();
-      this.writeDataSize.addAndGet(put.toString().getBytes().length);
-      this.writeResponseTime.addAndGet((int)(end-start));
     } catch (Throwable t) {
-      this.failedWriteRequestCount.incrementAndGet();
-      long end = System.currentTimeMillis();
-      this.writeResponseTime.addAndGet((int)(end-start));
       throw convertThrowableToIOE(cleanup(t));
     }
   }
 
   public int put(final byte[] regionName, final List<Put> puts)
       throws IOException {
-	
-	long start=System.currentTimeMillis();
     checkOpen();
     HRegion region = null;
     try {
@@ -1965,37 +1686,7 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
       }
 
       this.requestCount.addAndGet(puts.size());
-      this.writeRequestCount.addAndGet(puts.size());
-      for(Put p:puts)
-    	  this.writeDataSize.addAndGet(p.toString().getBytes().length);
       OperationStatusCode[] codes = region.put(putsWithLocks);
-      String tableName=region.getTableDesc().getNameAsString();
-      if(tableWriteRequestMap.containsKey(tableName))
-      {
-    	  int wc=tableWriteRequestMap.get(tableName);
-    	  tableWriteRequestMap.put(tableName, wc+puts.size());
-      }
-      else
-      {
-    	  tableWriteRequestMap.put(tableName, puts.size());
-      }
-      
-      String ip=HBaseServer.getRemoteAddress();
-      if(ip!=null)
-      {
-    	  if(this.ipWriteRequestMap.containsKey(ip))
-          {
-        	  int wc=ipWriteRequestMap.get(ip);
-        	  ipWriteRequestMap.put(ip, wc+puts.size());
-          }
-          else
-          {
-        	  ipWriteRequestMap.put(ip, puts.size());
-          }
-      }
-      
-      long end=System.currentTimeMillis();
-      this.writeResponseTime.addAndGet((int)(end-start));
       for (i = 0; i < codes.length; i++) {
         if (codes[i] != OperationStatusCode.SUCCESS) {
           return i;
@@ -2003,9 +1694,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
       }
       return -1;
     } catch (Throwable t) {
-      this.failedWriteRequestCount.incrementAndGet();
-      long end=System.currentTimeMillis();
-      this.writeResponseTime.addAndGet((int)(end-start));
       throw convertThrowableToIOE(cleanup(t));
     }
   }
@@ -2083,7 +1771,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
     requestCount.incrementAndGet();
     try {
       HRegion r = getRegion(regionName);
-      
       return addScanner(r.getScanner(scan));
     } catch (Throwable t) {
       throw convertThrowableToIOE(cleanup(t, "Failed openScanner"));
@@ -2107,9 +1794,8 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
     return res[0];
   }
 
-  public Result[] next(final long scannerId, int nbRows) throws IOException {  
-	  long start=System.currentTimeMillis();
-	  try {
+  public Result[] next(final long scannerId, int nbRows) throws IOException {
+    try {
       String scannerName = String.valueOf(scannerId);
       InternalScanner s = this.scanners.get(scannerName);
       if (s == null) {
@@ -2132,58 +1818,22 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
       List<Result> results = new ArrayList<Result>(nbRows);
       long currentScanResultSize = 0;
       List<KeyValue> values = new ArrayList<KeyValue>();
-      int readRequestAdded=0;
       for (int i = 0; i < nbRows
           && currentScanResultSize < maxScannerResultSize; i++) {
         requestCount.incrementAndGet();
-        this.readRequestCount.incrementAndGet();
-        readRequestAdded++;
         // Collect values to be returned here
         boolean moreRows = s.next(values);
         if (!values.isEmpty()) {
           for (KeyValue kv : values) {
             currentScanResultSize += kv.heapSize();
           }
-          Result res=new Result(values);
-          results.add(res);
-          this.readDataSize.addAndGet(res.toString().getBytes().length);
+          results.add(new Result(values));
         }
         if (!moreRows) {
           break;
         }
         values.clear();
-        long end=System.currentTimeMillis();
-        this.readResponseTime.addAndGet((int)(end-start));
-        start=end;
       }
-      String tableName=((HRegion.RegionScanner)s).getRegionName().getTableDesc().getNameAsString();
-      if(tableReadRequestMap.containsKey(tableName))
-      {
-    	  int rc=tableReadRequestMap.get(tableName);
-    	  tableReadRequestMap.put(tableName, rc+readRequestAdded);
-      }
-      else
-      {
-    	  tableReadRequestMap.put(tableName, readRequestAdded);
-      }
-      
-      String ip=HBaseServer.getRemoteAddress();
-      if(ip!=null)
-      {
-    	  if(this.ipReadRequestMap.containsKey(ip))
-          {
-        	  int rc=ipReadRequestMap.get(ip);
-        	  ipReadRequestMap.put(ip, rc+readRequestAdded);
-          }
-          else
-          {
-        	  ipReadRequestMap.put(ip, readRequestAdded);
-          }
-      }
-      
-      
-      this.memStoreHitCount.addAndGet(((HRegion.RegionScanner)s).getMemStoreHitCount());
-      this.memStoreMissCount.addAndGet(((HRegion.RegionScanner)s).getMemStoreMissCount());
       // Below is an ugly hack where we cast the InternalScanner to be a
       // HRegion.RegionScanner. The alternative is to change InternalScanner
       // interface but its used everywhere whereas we just need a bit of info
@@ -2197,9 +1847,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
         String scannerName = String.valueOf(scannerId);
         this.scanners.remove(scannerName);
       }
-      this.failedReadRequestCount.incrementAndGet();
-      long end=System.currentTimeMillis();
-      this.readResponseTime.addAndGet((int)(end-start));
       throw convertThrowableToIOE(cleanup(t));
     }
   }
@@ -2248,50 +1895,17 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
   //
   public void delete(final byte[] regionName, final Delete delete)
       throws IOException {
-	  long start=System.currentTimeMillis();
     checkOpen();
     try {
       boolean writeToWAL = true;
       this.requestCount.incrementAndGet();
-      this.writeRequestCount.incrementAndGet();
       HRegion region = getRegion(regionName);
       if (!region.getRegionInfo().isMetaTable()) {
         this.cacheFlusher.reclaimMemStoreMemory();
       }
       Integer lid = getLockFromId(delete.getLockId());
       region.delete(delete, lid, writeToWAL);
-      String tableName=region.getTableDesc().getNameAsString();
-      if(tableWriteRequestMap.containsKey(tableName))
-      {
-    	  int wc=tableWriteRequestMap.get(tableName);
-    	  tableWriteRequestMap.put(tableName, wc+1);
-      }
-      else
-      {
-    	  tableWriteRequestMap.put(tableName, 1);
-      }
-      
-      String ip=HBaseServer.getRemoteAddress();
-      if(ip!=null)
-      {
-    	  if(this.ipWriteRequestMap.containsKey(ip))
-          {
-        	  int wc=ipWriteRequestMap.get(ip);
-        	  ipWriteRequestMap.put(ip, wc+1);
-          }
-          else
-          {
-        	  ipWriteRequestMap.put(ip, 1);
-          }
-      }
-      
-      long end=System.currentTimeMillis();
-      this.writeDataSize.addAndGet(delete.toString().getBytes().length);
-      this.writeResponseTime.addAndGet((int)(end-start));
     } catch (Throwable t) {
-      this.failedWriteRequestCount.incrementAndGet();
-      long end=System.currentTimeMillis();
-      this.writeResponseTime.addAndGet((int)(end-start));
       throw convertThrowableToIOE(cleanup(t));
     }
   }
@@ -2673,56 +2287,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
   public AtomicInteger getRequestCount() {
     return this.requestCount;
   }
-  
-  /** @return the readrequest count */
-  public AtomicInteger getReadRequestCount() {
-    return this.readRequestCount;
-  }
-  
-  /** @return the read data size */
-  public AtomicInteger getReadDataSize() {
-    return this.readDataSize;
-  }
-  
-  /** @return the failedreadrequest count */
-  public AtomicInteger getFailedReadRequestCount() {
-    return this.failedReadRequestCount;
-  }
-  
-  /** @return the ReadResponseTime */
-  public AtomicInteger getReadResponseTimeCount() {
-    return this.readResponseTime;
-  }
-  
-  /** @return the writerequest count */
-  public AtomicInteger getWriteRequestCount() {
-    return this.writeRequestCount;
-  }
-  
-  /** @return the write data size */
-  public AtomicInteger getWriteDataSize() {
-    return this.writeDataSize;
-  }
-  
-  /** @return the failedwriterequest count */
-  public AtomicInteger getFailedWriteRequestCount() {
-    return this.failedWriteRequestCount;
-  }
-  
-  /** @return the WriteResponseTime  */
-  public AtomicInteger getWriteResponseTimeCount() {
-    return this.writeResponseTime;
-  }
-  
-  /** @return the memStoreHitCount  */
-  public AtomicInteger getMemStoreHitCount() {
-    return this.memStoreHitCount;
-  }
-  
-  /** @return the memStoreMissCount  */
-  public AtomicInteger getMemStoreMissCount() {
-    return this.memStoreMissCount;
-  }
 
   /** @return reference to FlushRequester */
   public FlushRequester getFlushRequester() {
@@ -3048,7 +2612,6 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
     return this.compactSplitThread;
   }
 
-
   //
   // Main program and support routines
   //
@@ -3109,40 +2672,7 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
     this.replicationHandler.replicateLogEntries(entries);
   }
 
-  /*
-   * add by hongzhen.lm
-   * */
-    private ReentrantReadWriteLock fsLock;
 
-    // utility methods to acquire and release read lock and write lock
-    void readLock() {
-        this.fsLock.readLock().lock();
-    }
-
-    void readUnlock() {
-        this.fsLock.readLock().unlock();
-    }
-
-    void writeLock() {
-        this.fsLock.writeLock().lock();
-    }
-
-    void writeUnlock() {
-        this.fsLock.writeLock().unlock();
-    }
-
-    boolean hasWriteLock() {
-        return this.fsLock.isWriteLockedByCurrentThread();
-    }
-
-    boolean hasReadLock() {
-        return this.fsLock.getReadHoldCount() > 0;
-    }
-
-    boolean hasReadOrWriteLock() {
-        return hasReadLock() || hasWriteLock();
-    }
-    
   /**
    * @see org.apache.hadoop.hbase.regionserver.HRegionServerCommandLine
    */
@@ -3154,40 +2684,4 @@ public class HRegionServer extends ReconfigurableBase implements HRegionInterfac
 
     new HRegionServerCommandLine(regionServerClass).doMain(args);
   }
-  /**
-   * @return
-   */
-  @Override
-    public Collection<String> getReconfigurableProperties() {
-        // TODO Auto-generated method stub
-        return Arrays.asList(HConstants.HBASE_REGIONSERVER_RECONFIG_TEST);
-    }
-
-  /**
-   * @param property
-   * @param newVal
-   * @throws ReconfigurationException
-   */
-  @Override
-    protected void reconfigurePropertyImpl(String property, String newVal) throws ReconfigurationException {
-        HRegionServer.LOG.info("[notice] HRegionServer start reconfig itself from  config files");
-        if (isPropertyReconfigurable(property)) {
-            writeLock();
-            try {
-                if (property.equals(HConstants.HBASE_REGIONSERVER_RECONFIG_TEST)) {
-                    HRegionServer.LOG.info("[notice] hbase_region_server_reconfig_test oraginal: " + hbase_regionServer_reconfig_test + " and update:" + newVal);
-                    hbase_regionServer_reconfig_test = newVal;
-                } else {
-                    throw new ReconfigurationException(property, newVal, getConf().get(property));
-                }
-
-            } catch (NumberFormatException e) {
-                throw new ReconfigurationException(property, newVal, getConf().get(property));
-            } finally {
-
-                writeUnlock();
-            }
-        }
-
-    }
 }
