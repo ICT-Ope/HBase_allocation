@@ -26,11 +26,9 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -75,9 +73,6 @@ import org.apache.hadoop.hbase.master.handler.TableAddFamilyHandler;
 import org.apache.hadoop.hbase.master.handler.TableDeleteFamilyHandler;
 import org.apache.hadoop.hbase.master.handler.TableModifyFamilyHandler;
 import org.apache.hadoop.hbase.master.metrics.MasterMetrics;
-import org.apache.hadoop.hbase.reconfig.ReconfigurableBase;
-import org.apache.hadoop.hbase.reconfig.ReconfigurationException;
-import org.apache.hadoop.hbase.reconfig.ReconfigurationServlet;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.replication.regionserver.Replication;
 import org.apache.hadoop.hbase.security.User;
@@ -89,17 +84,13 @@ import org.apache.hadoop.hbase.util.Threads;
 import org.apache.hadoop.hbase.util.VersionInfo;
 import org.apache.hadoop.hbase.zookeeper.ClusterStatusTracker;
 import org.apache.hadoop.hbase.zookeeper.RegionServerTracker;
-import org.apache.hadoop.hbase.zookeeper.ZKUtil;
 import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.net.DNS;
-import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.Watcher;
-import org.apache.zookeeper.ZooDefs;
-import org.apache.zookeeper.ZooKeeper;
 
 /**
  * HMaster is the "master server" for HBase. An HBase cluster has one active
@@ -179,10 +170,7 @@ implements HMasterInterface, HMasterRegionInterface, MasterServices, Server {
 
   private Thread catalogJanitorChore;
   private LogCleaner logCleaner;
-    // add by hongzhen.lm
-    private Reconfiguration reconfiguration;
-    private static final String CONF_SERVLET_PATH = "/hbconfchange";
-    private String hbase_reconfig_test = "Old";
+
   /**
    * Initializes the HMaster. The steps are as follows:
    * <p>
@@ -311,7 +299,6 @@ implements HMasterInterface, HMasterRegionInterface, MasterServices, Server {
       if (this.catalogTracker != null) this.catalogTracker.stop();
       if (this.serverManager != null) this.serverManager.stop();
       if (this.assignmentManager != null) this.assignmentManager.stop();
-      if (this.fileSystemManager != null) this.fileSystemManager.stop();
       HConnectionManager.deleteConnection(this.conf, true);
       this.zooKeeper.close();
     }
@@ -556,13 +543,8 @@ implements HMasterInterface, HMasterRegionInterface, MasterServices, Server {
       int port = this.conf.getInt("hbase.master.info.port", 60010);
       if (port >= 0) {
         String a = this.conf.get("hbase.master.info.bindAddress", "0.0.0.0");
-        reconfiguration = new Reconfiguration(getConfiguration());
         this.infoServer = new InfoServer(MASTER, a, port, false);
         this.infoServer.setAttribute(MASTER, this);
-        this.infoServer.setAttribute(ReconfigurationServlet.
-                CONF_SERVLET_RECONFIGURABLE_PREFIX +
-                CONF_SERVLET_PATH, reconfiguration);
-        infoServer.addServlet("hbconfchange", CONF_SERVLET_PATH, ReconfigurationServlet.class);
         this.infoServer.start();
       }
       // Start allowing requests to happen.
@@ -579,122 +561,6 @@ implements HMasterInterface, HMasterRegionInterface, MasterServices, Server {
     }
   }
 
-    /**
-     * reload  hbase-site.xml
-     * 
-     * @author hongzhen.lm E-mail:hongzhen.lm@taobao.com
-     * @since 2011-6-28 ÉÏÎç10:51:09
-     * @version 1.0
-     */
-    class Reconfiguration extends ReconfigurableBase {
-        private ReentrantReadWriteLock fsLock;
-        private ZooKeeper zooKeeper;
-
-        // utility methods to acquire and release read lock and write lock
-        void readLock() {
-            this.fsLock.readLock().lock();
-        }
-
-        void readUnlock() {
-            this.fsLock.readLock().unlock();
-        }
-
-        void writeLock() {
-            this.fsLock.writeLock().lock();
-        }
-
-        void writeUnlock() {
-            this.fsLock.writeLock().unlock();
-        }
-
-        boolean hasWriteLock() {
-            return this.fsLock.isWriteLockedByCurrentThread();
-        }
-
-        boolean hasReadLock() {
-            return this.fsLock.getReadHoldCount() > 0;
-        }
-
-        boolean hasReadOrWriteLock() {
-            return hasReadLock() || hasWriteLock();
-        }
-
-        public Reconfiguration(Configuration conf) {
-            super(conf);
-            zooKeeper = HMaster.this.zooKeeper.getZooKeeper();
-            this.fsLock = new ReentrantReadWriteLock(true); // init lock
-            init();// init reconfiguration root path into zookeeper
-        }
-
-        public void init() {
-            try {
-                zooKeeper.create(HConstants.HBASE_RECONFIG_ZOOKEEPER_PATH, new byte[0], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
-            } catch (KeeperException e) {
-
-                HMaster.LOG.error("[care] HMaster create config path into zookeeper have some error:" + e.getMessage());
-
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                HMaster.LOG.error("[care] HMaster create config path into zookeeper have some error:" + e.getMessage());
-                e.printStackTrace();
-            }
-
-        }
-
-        /**
-         * @return
-         */
-        @Override
-        public Collection<String> getReconfigurableProperties() {
-            // 
-            return Arrays.asList(HConstants.HBASE_RECONFIG_TEST);
-        }
-
-        /**
-         * @param property
-         * @param newVal
-         * @throws ReconfigurationException
-         */
-        @Override
-        protected void reconfigurePropertyImpl(String property, String newVal) throws ReconfigurationException {
-
-            if (isPropertyReconfigurable(property)) {
-                writeLock();
-                try {
-                    if (property.equals(HConstants.HBASE_RECONFIG_TEST)) {
-
-                        hbase_reconfig_test = newVal;
-                        // check reconfiguration node have exists
-
-                        HMaster.LOG.info("[care]hbase_reconfig_test oraginal:" + hbase_reconfig_test + "update:" + newVal);
-
-                    } else {
-                        throw new ReconfigurationException(property, newVal, getConf().get(property));
-                    }
-                    // notice hregionserver reconfigure
-                    if (zooKeeper != null && zooKeeper.exists(HConstants.HBASE_RECONFIG_ZOOKEEPER_PATH, false) != null) {
-                        HMaster.LOG.info("[care] notice HRegionServer reconfigure  ");
-                        zooKeeper.create(HConstants.HBASE_RECONFIG_ZOOKEEPER_PATH + "/reconfig_", new byte[0], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT_SEQUENTIAL);
-                    } else {
-                        throw new ReconfigurationException(property, newVal, getConf().get(property));
-                    }
-
-                } catch (NumberFormatException e) {
-                    throw new ReconfigurationException(property, newVal, getConf().get(property));
-                } catch (KeeperException e) {
-                    HMaster.LOG.info("KeeperException:" + e.getMessage());
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    // TODO Auto-generated catch block
-                    HMaster.LOG.info("InterruptedException:" + e.getMessage());
-                    e.printStackTrace();
-                } finally {
-
-                    writeUnlock();
-                }
-            }
-        }
-    }
   private void stopServiceThreads() {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Stopping service threads");
@@ -826,15 +692,12 @@ implements HMasterInterface, HMasterRegionInterface, MasterServices, Server {
         }
       }
       List<RegionPlan> plans = this.balancer.balanceCluster(assignments);
-      long start = System.currentTimeMillis();
       if (plans != null && !plans.isEmpty()) {
         for (RegionPlan plan: plans) {
           LOG.info("balance " + plan);
           this.assignmentManager.balance(plan);
         }
       }
-      long end = System.currentTimeMillis();
-      metrics.addBalance(end - start);
     }
     return true;
   }
@@ -921,13 +784,6 @@ implements HMasterInterface, HMasterRegionInterface, MasterServices, Server {
       boolean sync)
   throws IOException {
     String tableName = newRegions[0].getTableDesc().getNameAsString();
-    // add permitions in zk
-    try {
-    	String zkpath = ZKUtil.joinZNode(HConstants.DEFAULT_ZOOKEEPER_ZNODE_PARENT, tableName);
-		ZKUtil.createAndFailSilent(zooKeeper, zkpath);
-	} catch (KeeperException e1) {
-		e1.printStackTrace();
-	}
     if(MetaReader.tableExists(catalogTracker, tableName)) {
       throw new TableExistsException(tableName);
     }
