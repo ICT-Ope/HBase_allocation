@@ -1,6 +1,6 @@
 diff -uNr hbase-0.90.2/hbase-webapps/master/changegroupconf.jsp hbase-0.90.2-local/hbase-webapps/master/changegroupconf.jsp
---- hbase-0.90.2/hbase-webapps/master/changegroupconf.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/changegroupconf.jsp	2011-07-04 12:03:25.000000000 +0800
+--- hbase-webapps/master/changegroupconf.jsp	1970-01-01 08:00:00.000000000 +0800
++++ hbase-webapps/master/changegroupconf.jsp	2011-07-04 12:03:25.000000000 +0800
 @@ -0,0 +1,245 @@
 +<%@ page language="java" import="java.io.*" import="java.util.*"
 +	import="org.apache.hadoop.hbase.master.HMaster"
@@ -249,8 +249,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/changegroupconf.jsp hbase-0.90.2-loc
 +</html>
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp hbase-0.90.2-local/hbase-webapps/master/changetablegroup.jsp
---- hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/changetablegroup.jsp	2011-06-29 15:49:20.000000000 +0800
+--- hbase-webapps/master/changetablegroup.jsp	1970-01-01 08:00:00.000000000 +0800
++++ hbase-webapps/master/changetablegroup.jsp	2011-06-29 15:49:20.000000000 +0800
 @@ -0,0 +1,216 @@
 +<%@ page language="java" import="java.util.*" import="java.io.*"
 +	import="org.apache.hadoop.hbase.master.HMaster"
@@ -470,8 +470,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/changetablegroup.jsp hbase-0.90.2-lo
 +</html>
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/dogroupbalacne.jsp hbase-0.90.2-local/hbase-webapps/master/dogroupbalacne.jsp
---- hbase-0.90.2/hbase-webapps/master/dogroupbalacne.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/dogroupbalacne.jsp	2011-06-29 15:49:31.000000000 +0800
+--- hbase-webapps/master/dogroupbalacne.jsp	1970-01-01 08:00:00.000000000 +0800
++++ hbase-webapps/master/dogroupbalacne.jsp	2011-06-29 15:49:31.000000000 +0800
 @@ -0,0 +1,72 @@
 +<%@ page language="java" 
 +	import="org.apache.hadoop.hbase.master.GroupAssignmentManager"
@@ -547,8 +547,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/dogroupbalacne.jsp hbase-0.90.2-loca
 +</html>
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/dotablebalance.jsp hbase-0.90.2-local/hbase-webapps/master/dotablebalance.jsp
---- hbase-0.90.2/hbase-webapps/master/dotablebalance.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/dotablebalance.jsp	2011-06-29 15:49:44.000000000 +0800
+--- hbase-webapps/master/dotablebalance.jsp	1970-01-01 08:00:00.000000000 +0800
++++ hbase-webapps/master/dotablebalance.jsp	2011-06-29 15:49:44.000000000 +0800
 @@ -0,0 +1,141 @@
 +<%@ page language="java" import="java.util.*"
 +	import="org.apache.hadoop.hbase.master.GroupAssignmentManager"
@@ -693,8 +693,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/dotablebalance.jsp hbase-0.90.2-loca
 +</html>
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/groupinfo.jsp hbase-0.90.2-local/hbase-webapps/master/groupinfo.jsp
---- hbase-0.90.2/hbase-webapps/master/groupinfo.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/groupinfo.jsp	2011-06-29 15:49:52.000000000 +0800
+--- hbase-webapps/master/groupinfo.jsp	1970-01-01 08:00:00.000000000 +0800
++++ hbase-webapps/master/groupinfo.jsp	2011-06-29 15:49:52.000000000 +0800
 @@ -0,0 +1,158 @@
 +<%@ page language="java" 
 +	import="java.util.*"
@@ -856,8 +856,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/groupinfo.jsp hbase-0.90.2-local/hba
 +</html>
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/moveremoteconf.sh hbase-0.90.2-local/hbase-webapps/master/moveremoteconf.sh
---- hbase-0.90.2/hbase-webapps/master/moveremoteconf.sh	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/moveremoteconf.sh	2011-07-01 11:10:16.000000000 +0800
+--- hbase-webapps/master/moveremoteconf.sh	1970-01-01 08:00:00.000000000 +0800
++++ hbase-webapps/master/moveremoteconf.sh	2011-07-01 11:10:16.000000000 +0800
 @@ -0,0 +1,38 @@
 +#!/bin/bash
 +#Filename: moveremoteconf.sh
@@ -898,8 +898,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/moveremoteconf.sh hbase-0.90.2-local
 +	rm -f $filename
 +fi
 diff -uNr hbase-0.90.2/hbase-webapps/master/processgroup.jsp hbase-0.90.2-local/hbase-webapps/master/processgroup.jsp
---- hbase-0.90.2/hbase-webapps/master/processgroup.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/processgroup.jsp	2011-06-29 15:50:11.000000000 +0800
+--- hbase-webapps/master/processgroup.jsp	1970-01-01 08:00:00.000000000 +0800
++++ hbase-webapps/master/processgroup.jsp	2011-06-29 15:50:11.000000000 +0800
 @@ -0,0 +1,261 @@
 +<%@ page language="java" import="java.util.*" import="java.io.*"
 +	import="org.apache.hadoop.hbase.master.HMaster"
@@ -1164,8 +1164,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/processgroup.jsp hbase-0.90.2-local/
 +</html>
 \ No newline at end of file
 diff -uNr hbase-0.90.2/hbase-webapps/master/restartserver.sh hbase-0.90.2-local/hbase-webapps/master/restartserver.sh
---- hbase-0.90.2/hbase-webapps/master/restartserver.sh	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/restartserver.sh	2011-06-20 10:57:25.000000000 +0800
+--- hbase-webapps/master/restartserver.sh	1970-01-01 08:00:00.000000000 +0800
++++ hbase-webapps/master/restartserver.sh	2011-06-20 10:57:25.000000000 +0800
 @@ -0,0 +1,16 @@
 +#!/bin/bash
 +#Filename: restartserver.sh
@@ -1184,8 +1184,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/restartserver.sh hbase-0.90.2-local/
 +	ssh $server $STOP
 +fi
 diff -uNr hbase-0.90.2/hbase-webapps/master/showgroup.jsp hbase-0.90.2-local/hbase-webapps/master/showgroup.jsp
---- hbase-0.90.2/hbase-webapps/master/showgroup.jsp	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/hbase-webapps/master/showgroup.jsp	2011-07-01 15:38:28.000000000 +0800
+--- hbase-webapps/master/showgroup.jsp	1970-01-01 08:00:00.000000000 +0800
++++ hbase-webapps/master/showgroup.jsp	2011-07-01 15:38:28.000000000 +0800
 @@ -0,0 +1,222 @@
 +<%@ page language="java" import="java.util.*" import="java.io.*"
 +	import="org.apache.hadoop.hbase.master.HMaster"
@@ -1411,8 +1411,8 @@ diff -uNr hbase-0.90.2/hbase-webapps/master/showgroup.jsp hbase-0.90.2-local/hba
 +</html>
 \ No newline at end of file
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java	2011-07-20 11:41:12.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/CheckMeta.java	2011-07-20 11:41:12.000000000 +0800
 @@ -0,0 +1,284 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -1700,8 +1700,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/CheckMet
 +}
 \ No newline at end of file
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	2011-07-20 11:41:12.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/ScheduleQueue.java	2011-07-20 11:41:12.000000000 +0800
 @@ -0,0 +1,449 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -2153,8 +2153,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/Schedule
 +
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java	2011-07-01 13:00:14.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/group/AutoBalance.java	2011-07-01 13:00:14.000000000 +0800
 @@ -0,0 +1,195 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -2352,8 +2352,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Au
 +	}
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java	2011-07-01 14:41:43.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/group/MoveConfImpl.java	2011-07-01 14:41:43.000000000 +0800
 @@ -0,0 +1,179 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -2535,8 +2535,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Mo
 +	}
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java	2011-06-29 15:08:25.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/group/MoveGroupPlan.java	2011-06-29 15:08:25.000000000 +0800
 @@ -0,0 +1,104 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -2643,8 +2643,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Mo
 +	}
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java	2011-06-29 15:13:12.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/group/ProcessMove.java	2011-06-29 15:13:12.000000000 +0800
 @@ -0,0 +1,290 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -2937,8 +2937,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Pr
 +
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java	2011-07-01 19:26:07.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/group/ServerWithGroup.java	2011-07-01 19:26:07.000000000 +0800
 @@ -0,0 +1,673 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -3615,8 +3615,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/group/Se
 +}
 \ No newline at end of file
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java	2011-06-28 10:00:41.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/test/BalanceRegionByTable.java	2011-06-28 10:00:41.000000000 +0800
 @@ -0,0 +1,213 @@
 +package org.apache.hadoop.hbase.allocation.test;
 +
@@ -3832,8 +3832,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/Bal
 +	}
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java	2011-06-28 10:01:13.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/test/GroupTest.java	2011-06-28 10:01:13.000000000 +0800
 @@ -0,0 +1,105 @@
 +package org.apache.hadoop.hbase.allocation.test;
 +
@@ -3941,8 +3941,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/Gro
 +
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java	2011-06-24 15:05:52.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/allocation/test/TestForSchedule.java	2011-06-24 15:05:52.000000000 +0800
 @@ -0,0 +1,253 @@
 +package org.apache.hadoop.hbase.allocation.test;
 +
@@ -4198,8 +4198,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/allocation/test/Tes
 +
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	2011-07-20 11:41:12.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseServer.java	2011-07-20 11:41:12.000000000 +0800
 @@ -0,0 +1,1806 @@
 +package org.apache.hadoop.hbase.ipc;
 +
@@ -6008,8 +6008,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/ipc/ScheduleHBaseSe
 +
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	1970-01-01 08:00:00.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	2011-07-20 11:41:12.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	1970-01-01 08:00:00.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/master/GroupAssignmentManager.java	2011-07-20 11:41:12.000000000 +0800
 @@ -0,0 +1,1590 @@
 +/**
 + * Copyright 2010 The Apache Software Foundation
@@ -7602,8 +7602,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/GroupAssignm
 +
 +}
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/HMaster.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/HMaster.java	2011-03-28 04:50:34.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/master/HMaster.java	2011-07-22 17:14:19.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/master/HMaster.java	2011-03-28 04:50:34.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/master/HMaster.java	2011-07-22 17:14:19.000000000 +0800
 @@ -354,7 +354,7 @@
        this, conf.getInt("hbase.master.catalog.timeout", Integer.MAX_VALUE));
      this.catalogTracker.start();
@@ -7614,8 +7614,8 @@ diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
      this.balancer = new LoadBalancer(conf);
      zooKeeper.registerListenerFirst(assignmentManager);
 diff -uNr hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
---- hbase-0.90.2/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java	2011-03-28 04:50:34.000000000 +0800
-+++ hbase-0.90.2-local/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java	2011-07-22 17:14:27.000000000 +0800
+--- src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java	2011-03-28 04:50:34.000000000 +0800
++++ src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java	2011-07-22 17:14:27.000000000 +0800
 @@ -106,6 +106,7 @@
  import org.apache.hadoop.hbase.ipc.HBaseServer;
  import org.apache.hadoop.hbase.ipc.HMasterRegionInterface;
