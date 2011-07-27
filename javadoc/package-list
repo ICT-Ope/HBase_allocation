@@ -1,6 +1,0 @@
-org.apache.hadoop.hbase.allocation
-org.apache.hadoop.hbase.allocation.group
-org.apache.hadoop.hbase.allocation.test
-org.apache.hadoop.hbase.ipc
-org.apache.hadoop.hbase.master
-org.apache.hadoop.hbase.regionserver
