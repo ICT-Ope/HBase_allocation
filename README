@@ -7,6 +7,8 @@ There are some instruction documents in doc fold.
 
  [1] Taobao (simplified Chinese: 淘宝网; traditional Chinese: 淘寶網; pinyin: Táobǎowǎng) is a Chinese language web site for online shopping, similar to eBay, Rakuten and Amazon,[2] operated in the People's Republic of China by Alibaba Group.In 2009 Taobao saw advertising revenues of $220 Million.
 
+There is a test case  for table priority located in org.apache.hadoop.hbase.allocation.test.TestForSchedule 
+
 Support Hbase Version: hbase-0.90.2 hbase-0.90.3
 
 hbase-0.90.3 Changes:group name can be set to String.
