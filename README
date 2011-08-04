@@ -11,8 +11,22 @@ There is a test case  for table priority located in org.apache.hadoop.hbase.allo
 For installation and use cases, please refer to "HBase_Isolation_Allocation_User_Guide.pdf".
 
 Support Hbase Version: hbase-0.90.2 hbase-0.90.3
+se-0.90.3 
+	Changes:
+			group name can be set to String.
+			tablepriority alone
+	Changes: 
+			Rename ScheduleHBaseServer to PriorityHBaseServer
+			Use "hbase.tablepriority.enable" to choose whether enable table priority.
+			Different actions like "get","scan","put" and "delete" can have priorities
+			In table descriptor you can set table priority and action priority like this:
+			/*
+			des.setValue(Bytes.toBytes(PriorityHBaseServer.PRI_KEY), Bytes.toBytes("3"));
+			des.setValue(Bytes.toBytes(PriorityHBaseServer.PRI_KEY_ACTION_PLUS),
+       		new ActionPriPlus(6, 0, 0, 0).toBytes()); //scan 6 , put 0, get 0 ,delete 0
+			*/
+																										
 
-hbase-0.90.3 Changes:group name can be set to String.
 
-##
-Add TablePriority.patch and TestTablePriority.patch
+
+
