@@ -1,0 +1,994 @@
+diff -uNr a/src/test/java/org/apache/hadoop/hbase/allocation/test/TestForActionPriority.java a_pri/src/test/java/org/apache/hadoop/hbase/allocation/test/TestForActionPriority.java
+--- src/test/java/org/apache/hadoop/hbase/allocation/test/TestForActionPriority.java	(revision 0)
++++ src/test/java/org/apache/hadoop/hbase/allocation/test/TestForActionPriority.java	(working copy)
+@@ -0,0 +1,253 @@
++package org.apache.hadoop.hbase.allocation.test;
++
++import java.io.IOException;
++import java.util.Random;
++import junit.framework.TestCase;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.HBaseConfiguration;
++import org.apache.hadoop.hbase.HColumnDescriptor;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.allocation.test.TestForTablePriority.Worker;
++import org.apache.hadoop.hbase.client.HBaseAdmin;
++import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.client.Put;
++import org.apache.hadoop.hbase.client.Result;
++import org.apache.hadoop.hbase.client.ResultScanner;
++import org.apache.hadoop.hbase.client.Scan;
++import org.apache.hadoop.hbase.ipc.PriorityHBaseServer;
++import org.apache.hadoop.hbase.ipc.PriorityHBaseServer.ActionPriorities;
++import org.apache.hadoop.hbase.master.HMaster;
++import org.apache.hadoop.hbase.regionserver.HRegionServer;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.zookeeper.HQuorumPeer;
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++
++/**
++ * Test for action priority, use Action_Priority table and scan and put with
++ * different priorities. There are two tests,in first one get's priority is
++ * 0(high priority, RPC priority = table priority 0+ get priority 0) <br>
++ * scan's priority is 10 (RPC priority = table priority 0+ scan priority 10) and
++ * in the second test,we switch the priorities of scan and get.
++ */
++public class TestForActionPriority extends TestCase {
++  private final static Log LOG = LogFactory.getLog(TestForActionPriority.class);
++  static final Configuration conf = HBaseConfiguration.create();
++  static final Random r = new Random();
++  static final int rowNubmer = 300000;
++  static final int threadN = 500;
++  HBaseAdmin admin = null;
++
++  /**
++   * set up a cluster and prepare tables.
++   */
++  public void setUp() {
++    TestForTablePriority.startCluster();
++    try {
++      admin = new HBaseAdmin(conf);
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++    HTableDescriptor des;
++    byte[][] startKeys = new byte[][] { Bytes.toBytes("0"), Bytes.toBytes("2"),
++        Bytes.toBytes("4"), Bytes.toBytes("8") };
++    try {
++      if (!admin.tableExists("Action_Priority")) {
++        des = new HTableDescriptor("Action_Priority");
++        des.addFamily(new HColumnDescriptor("ff"));
++        des.setValue(Bytes.toBytes("priority"), Bytes.toBytes(0 + ""));
++        admin.createTable(des, startKeys);
++      }
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++    writeData();
++  }
++
++  private void writeData() {
++    LOG.info("begion write data into test table");
++    int nPerWorker = rowNubmer / threadN;
++    Worker[] workers = new Worker[threadN];
++    for (int i = 0; i < workers.length; i++) {
++      try {
++        workers[i] = new Worker(new HTable("Action_Priority"), "writeData",
++            nPerWorker);
++      } catch (IOException e) {
++      }
++    }
++    for (int i = 0; i < workers.length; i++) {
++      workers[i].start();
++    }
++    for (int i = 0; i < workers.length; i++) {
++      try {
++        workers[i].join();
++      } catch (InterruptedException e) {
++        LOG.error(e);
++      }
++    }
++    LOG.info("Write data into test table finished.");
++  }
++
++  public void tearDown() {
++
++  }
++
++
++
++  /**
++   * Verify whether the function take effect
++   * 
++   * @param highs
++   *          high priority workers
++   * @param lows
++   *          low priority workers
++   */
++
++  @SuppressWarnings("static-access")
++  public void verifyFunction(Worker highs[], Worker lows[]) {
++    boolean highFinished = false;
++    boolean lowFinished = false;
++    long highThroughPut = 0;
++    long lowThroughPut = 0;
++    while (!(highFinished && lowFinished)) {
++      highThroughPut = 0;
++      lowThroughPut = 0;
++      for (int i = 0; i < highs.length; i++) {
++        highThroughPut += highs[i].getThroughput();
++        lowThroughPut += lows[i].getThroughput();
++      }
++      LOG.info("-------------------------------------------------------------");
++      LOG.info("High priority action type is:" + highs[0].getType()
++          + ", priority:" + highs[0].getActionPriority() + " throughput is:"
++          + highThroughPut);
++      LOG.info("low priority action type is:" + lows[0].getType()
++          + ", priority:" + lows[0].getActionPriority() + " throughput is:"
++          + lowThroughPut);
++      highFinished = true;
++      lowFinished = true;
++      for (int i = 0; i < highs.length; i++) {
++        if (highs[i].isAlive()) {
++          highFinished = false;
++        }
++        if (lows[i].isAlive()) {
++          lowFinished = false;
++        }
++      }
++      if (highFinished) {
++        for (int i = 0; i < highs.length; i++) {
++          lows[i].stopWorker();
++        }
++        lowFinished = true;
++      }
++      if (lowFinished) {
++        for (int i = 0; i < highs.length; i++) {
++          highs[i].stopWorker();
++        }
++        highFinished = true;
++      }
++      try {
++        Thread.currentThread().sleep(1000);
++      } catch (InterruptedException e) {
++        // ignore exceptions
++      }
++    }
++    highThroughPut = 0;
++    lowThroughPut = 0;
++    for (int i = 0; i < highs.length; i++) {
++      highThroughPut += highs[i].getThroughput();
++      lowThroughPut += lows[i].getThroughput();
++    }
++    LOG.info("-------------------------------------------------------------");
++    LOG.info("---------------------Test finished --------------------------");
++    LOG.info("High priority action type is:" + highs[0].getType()
++        + ", priority:" + highs[0].getActionPriority() + " throughput is:"
++        + highThroughPut);
++    LOG.info("low priority action type is:" + lows[0].getType() + ", priority:"
++        + lows[0].getActionPriority() + " throughput is:" + lowThroughPut);
++    LOG.info("####### Test for " + highs[0].getType() + ", priority:"
++        + highs[0].getActionPriority() + " ,and " + lows[0].getType()
++        + ", priority:" + lows[0].getActionPriority() + " finished####");
++    assertTrue("Action priority works properly", highThroughPut > lowThroughPut);
++    LOG.info("-------------------------------------------------------------");
++  }
++
++  /**
++   * run the test;
++   */
++  public void testForDifferentActionPriority() {
++    try {
++      admin.disableTable("Action_Priority");
++      HTableDescriptor des1 = admin.getTableDescriptor(Bytes
++          .toBytes("Action_Priority"));
++      des1.setValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS,
++          new ActionPriorities(10, 0, 0, 0).toBytes());
++      admin.modifyTable(Bytes.toBytes("Action_Priority"), des1);
++      admin.enableTable("Action_Priority");
++    } catch (IOException e) {
++      LOG.info(e);
++    }
++    PriorityHBaseServer.refreshCache();
++    try {
++      Thread.currentThread().sleep(3000);
++    } catch (InterruptedException e1) {
++    }
++    Worker puts[] = new Worker[threadN / 2];
++    Worker scans[] = new Worker[threadN / 2];
++    for (int i = 0; i < puts.length; i++) {
++      try {
++        puts[i] = new Worker(new HTable("Action_Priority"), "put", rowNubmer
++            * 2 / threadN);
++        scans[i] = new Worker(new HTable("Action_Priority"), "scan", rowNubmer
++            * 2 / threadN);
++      } catch (IOException e) {
++      }
++    }
++    for (int i = 0; i < puts.length; i++) {
++      puts[i].setActionPriority(0);
++      puts[i].start();
++      scans[i].start();
++      scans[i].setActionPriority(10);
++    }
++    verifyFunction(puts, scans);
++
++    try {
++      admin.disableTable("Action_Priority");
++      HTableDescriptor des1 = admin.getTableDescriptor(Bytes
++          .toBytes("Action_Priority"));
++      des1.setValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS,
++          new ActionPriorities(0, 10, 10, 10).toBytes());
++      admin.modifyTable(Bytes.toBytes("Action_Priority"), des1);
++      admin.enableTable("Action_Priority");
++    } catch (IOException e) {
++      LOG.info(e);
++    }
++    PriorityHBaseServer.refreshCache();
++    try {
++      Thread.currentThread().sleep(3000);
++    } catch (InterruptedException e1) {
++    }
++    puts = new Worker[threadN / 2];
++    scans = new Worker[threadN / 2];
++    for (int i = 0; i < puts.length; i++) {
++      try {
++
++        puts[i] = new Worker(new HTable("Action_Priority"), "put", rowNubmer
++            * 2 / threadN);
++        scans[i] = new Worker(new HTable("Action_Priority"), "scan", rowNubmer
++            * 2 / threadN);
++        puts[i].setActionPriority(10);
++        scans[i].setActionPriority(0);
++      } catch (IOException e) {
++      }
++    }
++    for (int i = 0; i < puts.length; i++) {
++      puts[i].start();
++      scans[i].start();
++    }
++    verifyFunction(scans, puts);
++  }
++
++  public static void main(String args[]) {
++    junit.textui.TestRunner.run(TestForActionPriority.class);
++  }
++}
+diff -uNr a/src/test/java/org/apache/hadoop/hbase/allocation/test/TestForPriorityJobQueue.java a_pri/src/test/java/org/apache/hadoop/hbase/allocation/test/TestForPriorityJobQueue.java
+--- src/test/java/org/apache/hadoop/hbase/allocation/test/TestForPriorityJobQueue.java	(revision 0)
++++ src/test/java/org/apache/hadoop/hbase/allocation/test/TestForPriorityJobQueue.java	(working copy)
+@@ -0,0 +1,146 @@
++/**
++ * Copyright 2007 The Apache Software Foundation
++ *
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.allocation.test;
++
++import java.util.Random;
++import junit.framework.TestCase;
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.hbase.ipc.PriorityJobQueue;
++import org.apache.hadoop.hbase.ipc.PriorityJobQueue.Job;
++
++/**
++ * Test used to ensure the PriorityJobQueue works properly
++ * 
++ */
++public class TestForPriorityJobQueue extends TestCase {
++  private final Log LOG = LogFactory.getLog(TestForPriorityJobQueue.class);
++  private static final int lowestPriority = 10;
++  private static final int queueSize = 1000;
++  private static final int testThreadN = 50;
++  private static final int testTimes = 10000;
++
++  public static void main(String args[]) {
++    junit.textui.TestRunner.run(TestForPriorityJobQueue.class);
++  }
++
++  /**
++   * test for ensure the queue refreshed the jobs' priority
++   */
++  @SuppressWarnings("static-access")
++  public void testQueueRefresh() {
++    final PriorityJobQueue<String> queue = new PriorityJobQueue<String>(
++        queueSize, lowestPriority, null);
++    for (int i = 0; i < 10; i++) {
++      queue.add(i + "", 10);
++    }
++
++    boolean match = true;
++    queue.refresh();
++    queue.refresh();
++    try {
++      Thread.currentThread().sleep(1000);
++    } catch (InterruptedException e) {
++    }
++    for (Object j : queue.toArray()) {
++      Job job = (Job) j;
++      LOG.debug("Job is:" + job);
++      if (job.getPriority() >= 10)
++        match = false;
++    }
++    assertTrue("calls' priorities are refreshed", match);
++  }
++
++  /**
++   * test the queue's function: threads (not with the lowest priority) <br>
++   * can only get a job which have a higher priority And test the number which
++   * input jobs is equal with the output number
++   */
++  public void testGetJob() {
++    final Random r = new Random();
++    final PriorityJobQueue<String> queue = new PriorityJobQueue<String>(
++        queueSize, lowestPriority, null);
++    Thread consumer[] = new Thread[testThreadN];
++    int pri = 1;
++
++    for (int i = 0; i < consumer.length; i++, pri++) {
++      consumer[i] = new Thread(i + "") {
++        public void run() {
++          while (true) {
++            String j = null;
++            try {
++              j = (String) queue.take();
++            } catch (InterruptedException e) {
++            }
++            if ((Math.abs(this.getPriority() - 10) + 1) != lowestPriority) {
++              assertTrue(
++                  "Thread get a job which have a higher priority",
++                  Integer.parseInt(j) <= (Math.abs(this.getPriority() - 10) + 1));
++              LOG.debug("job:" + Integer.parseInt(j) + "  handler:"
++                  + (Math.abs(this.getPriority() - 10) + 1));
++            }
++          }
++        }
++      };
++      if (pri >= 11)
++        pri = 1;
++      consumer[i].setDaemon(true);
++      consumer[i].setPriority(pri);
++      consumer[i].start();
++    }
++
++    Thread producer[] = new Thread[testThreadN];
++    for (int i = 0; i < producer.length; i++) {
++      producer[i] = new Thread(i + "") {
++        @SuppressWarnings("static-access")
++        public void run() {
++          for (int j = 0; j < testTimes; j++) {
++            int jobpri = (r.nextInt(19) - 4);
++            queue.add("" + jobpri, jobpri);
++          }
++        }
++      };
++      producer[i].start();
++    }
++    for (Thread d : producer) {
++      try {
++        d.join();
++      } catch (InterruptedException e) {
++      }
++    }
++
++    while (queue.size() != 0) {
++      try {
++        Thread.currentThread().sleep(100);
++      } catch (InterruptedException e) {
++      }
++    }
++
++    boolean match = true;
++    for (int i = 0; i < 10; i++) {
++      if (queue.getPriorityAddTimes()[i] != queue.getPriorityGetTimes()[i]) {
++        match = false;
++      }
++    }
++    assertTrue("all job are finished", match);
++    queue.printMetrix();
++    // assertTrue("Thread get a job which have a higher priority", true);
++  }
++}
+diff -uNr a/src/test/java/org/apache/hadoop/hbase/allocation/test/TestForTablePriority.java a_pri/src/test/java/org/apache/hadoop/hbase/allocation/test/TestForTablePriority.java
+--- src/test/java/org/apache/hadoop/hbase/allocation/test/TestForTablePriority.java	(revision 1155226)
++++ src/test/java/org/apache/hadoop/hbase/allocation/test/TestForTablePriority.java	(working copy)
+@@ -0,0 +1,583 @@
++/**
++ * Copyright 2007 The Apache Software Foundation
++ *
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.allocation.test;
++
++import java.io.IOException;
++import java.util.Random;
++import junit.framework.TestCase;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.HBaseConfiguration;
++import org.apache.hadoop.hbase.HColumnDescriptor;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.client.HBaseAdmin;
++import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.client.Put;
++import org.apache.hadoop.hbase.client.Result;
++import org.apache.hadoop.hbase.client.ResultScanner;
++import org.apache.hadoop.hbase.client.Scan;
++import org.apache.hadoop.hbase.ipc.PriorityHBaseServer;
++import org.apache.hadoop.hbase.ipc.PriorityHBaseServer.ActionPriorities;
++import org.apache.hadoop.hbase.master.HMaster;
++import org.apache.hadoop.hbase.regionserver.HRegionServer;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.zookeeper.HQuorumPeer;
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++
++/**
++ * Test for table priority, use table A,B,C which have different priorities.
++ * There are two tests,in first one table A's priority is 1(high priority), B is
++ * 5, C is 10 and in the second test,we switch the priorities of A and C.
++ */
++public class TestForTablePriority extends TestCase {
++  private final static Log LOG = LogFactory.getLog(TestForTablePriority.class);
++  static final Configuration conf = HBaseConfiguration.create();
++  static final Random r = new Random();
++  static final int rowNubmer = 600000;
++  static final int threadN = 600;
++  HBaseAdmin admin = null;
++  static final String method = "put";// if there are data in the test tables,you
++                                     // can set method type to "scan"
++
++  static void startCluster() {
++    Thread zk = new Thread() {
++      public void run() {
++        HQuorumPeer.main(null);
++      }
++    };
++    Thread master = new Thread() {
++      public void run() {
++        try {
++          HMaster.main(new String[] { "start" });
++        } catch (Exception e) {
++          LOG.error(e);
++        }
++      }
++    };
++    Thread RS = new Thread() {
++      public void run() {
++        try {
++          HRegionServer.main(new String[] { "start" });
++        } catch (Exception e) {
++          LOG.error(e);
++        }
++      }
++    };
++    zk.setDaemon(true);
++    master.setDaemon(true);
++    RS.setDaemon(true);
++    zk.start();
++    try {
++      Thread.currentThread().sleep(5000);
++    } catch (InterruptedException e1) {
++    }
++    master.start();
++    try {
++      Thread.currentThread().sleep(5000);
++    } catch (InterruptedException e1) {
++    }
++    RS.start();
++  }
++
++  /**
++   * set up a cluster and prepare tables.
++   */
++  public void setUp() {
++    this.startCluster();
++    try {
++      admin = new HBaseAdmin(conf);
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++    HTableDescriptor des;
++    byte[][] startKeys = new byte[][] { Bytes.toBytes("0"), Bytes.toBytes("2"),
++        Bytes.toBytes("4"), Bytes.toBytes("8") };
++    try {
++      if (!admin.tableExists("Table_A")) {
++        des = new HTableDescriptor("Table_A");
++        des.addFamily(new HColumnDescriptor("ff"));
++        des = PriorityHBaseServer.setPriority(1, des);
++        admin.createTable(des, startKeys);
++      }
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++    try {
++      if (!admin.tableExists("Table_B")) {
++        des = new HTableDescriptor("Table_B");
++        des.addFamily(new HColumnDescriptor("ff"));
++        des = PriorityHBaseServer.setPriority(5, des);
++        admin.createTable(des, startKeys);
++      }
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++    try {
++      if (!admin.tableExists("Table_C")) {
++        des = new HTableDescriptor("Table_C");
++        des.addFamily(new HColumnDescriptor("ff"));
++        des = PriorityHBaseServer.setPriority(10, des);
++        admin.createTable(des, startKeys);
++      }
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++
++  }
++
++  /**
++   * The worker used for test throughput and gather the result
++   */
++  public static class Worker extends Thread {
++    HTable table;
++    String type;
++    private long throughput = 0;
++    long times = 1000;
++    boolean stopFlag = false;
++    int talbePriority;
++    long n = 0;
++    long startTime = 0;
++    int actionPriority = 0;
++
++    /**
++     * get throughput of this worker
++     * 
++     * @return
++     */
++    public long getThroughput() {
++      long end = System.currentTimeMillis();
++      throughput = (n * 1000) / (end - startTime + 1);
++      return throughput;
++    }
++
++    /**
++     * get table priority
++     * 
++     * @return table priority
++     */
++    public int getTalbePriority() {
++      return talbePriority;
++    }
++
++    /**
++     * set table priority
++     */
++    public void setTalbePriority(int talbePriority) {
++      this.talbePriority = talbePriority;
++    }
++
++    /**
++     * get action type
++     * 
++     * @return action type of the worker
++     */
++    public String getType() {
++      return type;
++    }
++
++    /**
++     * the table used by the worker
++     * 
++     * @return table of the worker
++     */
++    public HTable getTable() {
++      return table;
++    }
++
++    public Worker(HTable t, String type, long times) {
++      this.table = t;
++      this.type = type;
++      this.times = times;
++    }
++
++    public void run() {
++      try {
++        doAction(table, type, times);
++      } catch (IOException e) {
++        LOG.info(e);
++      }
++    }
++
++    public int getActionPriority() {
++      return actionPriority;
++    }
++
++    public void setActionPriority(int actionPriority) {
++      this.actionPriority = actionPriority;
++    }
++
++    /**
++     * stop the worker
++     */
++    public void stopWorker() {
++      this.stopFlag = true;
++    }
++
++    private void doAction(HTable t, String type, long times) throws IOException {
++      long start = System.currentTimeMillis();
++      long end = System.currentTimeMillis();
++      startTime = System.currentTimeMillis();
++      int pri = Integer.parseInt(Bytes.toString(t.getTableDescriptor()
++          .getValue(PriorityHBaseServer.PRI_KEY)));
++      Scan s = new Scan();
++      s.setStartRow(Bytes.toBytes(r.nextInt(10)));
++      if (type.equals("writeData")) {
++        t.setAutoFlush(false);
++        t.setWriteBufferSize(100000);
++      }
++      ResultScanner sn = t.getScanner(s);
++      boolean scan = false;
++      if (type.equals("scan"))
++        scan = true;
++      while (true) {
++        if (n % 10000 == 0) {
++          end = System.currentTimeMillis();
++          LOG.debug("Thread:" + this.getId() + " type:" + type + "  table"
++              + t.getTableDescriptor().getNameAsString() + " pri :" + pri
++              + " time:" + (end - start) + " total :" + n + "  throughput:"
++              + (n * 1000) / (end - startTime + 1));
++          throughput = (n * 1000) / (end - startTime + 1);
++          start = end;
++        }
++        if (n % 100 == 0) {
++          end = System.currentTimeMillis();
++          throughput = (n * 1000) / (end - startTime + 1);
++        }
++        Result ret = null;
++        if (scan) {
++          ret = sn.next();
++          if (ret == null) {
++            try {
++              sn.close();
++            } catch (Exception e) {
++              LOG.debug(e);
++            }
++            sn = t.getScanner(s);
++          }
++        } else {
++          put(t, n);
++        }
++        if (stopFlag || n > times) {
++          break;
++        }
++        n++;
++      }
++      t.flushCommits();
++      t.close();
++    }
++  }
++
++  /**
++   * Verify whether the function take effect
++   * 
++   * @param highs
++   *          high priority workers
++   * @param lows
++   *          low priority workers
++   */
++  @SuppressWarnings("static-access")
++  public void verifyFunction(Worker high[], Worker middle[], Worker low[]) {
++    boolean highFinished = false;
++    boolean lowFinished = false;
++    boolean middleFinished = false;
++    long highThroughPut = 0;
++    long middleThroughPut = 0;
++    long lowThroughPut = 0;
++    while (!(highFinished && lowFinished && middleFinished)) {
++      highThroughPut = 0;
++      middleThroughPut = 0;
++      lowThroughPut = 0;
++      for (int i = 0; i < high.length; i++) {
++        highThroughPut += high[i].getThroughput();
++        lowThroughPut += low[i].getThroughput();
++        middleThroughPut += middle[i].getThroughput();
++      }
++      LOG.info("-------------------------------------------------------------");
++
++      try {
++        LOG.info("high priority table is: "
++            + high[0].getTable().getTableDescriptor().getNameAsString()
++            + " action type is:" + high[0].getType() + ", priority:"
++            + high[0].getTalbePriority() + " throughput is:" + highThroughPut);
++        LOG.info("middle priority table is: "
++            + middle[0].getTable().getTableDescriptor().getNameAsString()
++            + " action type is:" + middle[0].getType() + ", priority:"
++            + middle[0].getTalbePriority() + " throughput is:"
++            + middleThroughPut);
++        LOG.info("low priority table is: "
++            + low[0].getTable().getTableDescriptor().getNameAsString()
++            + " action type is:" + low[0].getType() + ", priority:"
++            + low[0].getTalbePriority() + " throughput is:" + lowThroughPut);
++      } catch (Exception e) {
++        LOG.error(e);
++      }
++
++      highFinished = true;
++      lowFinished = true;
++      middleFinished = true;
++      for (int i = 0; i < high.length; i++) {
++        if (high[i].isAlive()) {
++          highFinished = false;
++        }
++        if (low[i].isAlive()) {
++          lowFinished = false;
++        }
++        if (middle[i].isAlive()) {
++          middleFinished = false;
++        }
++      }
++      if (highFinished) {
++        for (int i = 0; i < high.length; i++) {
++          low[i].stopWorker();
++        }
++        for (int i = 0; i < high.length; i++) {
++          middle[i].stopWorker();
++        }
++        middleFinished = true;
++        lowFinished = true;
++      }
++      if (lowFinished) {
++        for (int i = 0; i < high.length; i++) {
++          high[i].stopWorker();
++        }
++        for (int i = 0; i < high.length; i++) {
++          middle[i].stopWorker();
++        }
++        middleFinished = true;
++        highFinished = true;
++      }
++      if (middleFinished) {
++        for (int i = 0; i < high.length; i++) {
++          high[i].stopWorker();
++        }
++        for (int i = 0; i < high.length; i++) {
++          low[i].stopWorker();
++        }
++        lowFinished = true;
++        highFinished = true;
++      }
++      try {
++        Thread.currentThread().sleep(1000);
++      } catch (InterruptedException e) {
++        // ignore exceptions
++      }
++    }
++    highThroughPut = 0;
++    middleThroughPut = 0;
++    lowThroughPut = 0;
++    for (int i = 0; i < high.length; i++) {
++      highThroughPut += high[i].getThroughput();
++      lowThroughPut += low[i].getThroughput();
++      middleThroughPut += middle[i].getThroughput();
++    }
++
++    LOG.info("-------------------------------------------------------------");
++    LOG.info("---------------------Test finished --------------------------");
++
++    try {
++      LOG.info("high priority table is: "
++          + high[0].getTable().getTableDescriptor().getNameAsString()
++          + " action type is:" + high[0].getType() + ", priority:"
++          + high[0].getTalbePriority() + " throughput is:" + highThroughPut);
++      LOG.info("middle priority table is: "
++          + middle[0].getTable().getTableDescriptor().getNameAsString()
++          + " action type is:" + middle[0].getType() + ", priority:"
++          + middle[0].getTalbePriority() + " throughput is:" + middleThroughPut);
++      LOG.info("low priority table is: "
++          + low[0].getTable().getTableDescriptor().getNameAsString()
++          + " action type is:" + low[0].getType() + ", priority:"
++          + low[0].getTalbePriority() + " throughput is:" + lowThroughPut);
++    } catch (Exception e) {
++      LOG.error(e);
++    }
++    LOG.info("####### Test for " + high[0].getType() + ", priority:"
++        + high[0].getTalbePriority() + " " + middle[0].getType()
++        + ", priority:" + middle[0].getTalbePriority() + " ,and "
++        + low[0].getType() + ", priority:" + low[0].getTalbePriority()
++        + " finished####");
++    assertTrue("Action priority works properly",
++        highThroughPut > middleThroughPut && middleThroughPut > lowThroughPut);
++    LOG.info("-------------------------------------------------------------");
++  }
++
++  /**
++   * start the test.
++   */
++  public void testForDifferentTablePriority() {
++    try {
++      admin.disableTable("Table_A");
++      HTableDescriptor des1 = admin
++          .getTableDescriptor(Bytes.toBytes("Table_A"));
++      des1.setValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS,
++          new ActionPriorities(0, 0, 0, 0).toBytes());
++      des1 = PriorityHBaseServer.setPriority(1, des1);
++      admin.modifyTable(Bytes.toBytes("Table_A"), des1);
++      admin.enableTable("Table_A");
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++    try {
++      admin.disableTable("Table_B");
++      HTableDescriptor des1 = admin
++          .getTableDescriptor(Bytes.toBytes("Table_B"));
++      des1.setValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS,
++          new ActionPriorities(0, 0, 0, 0).toBytes());
++      des1 = PriorityHBaseServer.setPriority(5, des1);
++      admin.modifyTable(Bytes.toBytes("Table_B"), des1);
++      admin.enableTable("Table_B");
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++    try {
++      admin.disableTable("Table_C");
++      HTableDescriptor des1 = admin
++          .getTableDescriptor(Bytes.toBytes("Table_C"));
++      des1.setValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS,
++          new ActionPriorities(0, 0, 0, 0).toBytes());
++      des1 = PriorityHBaseServer.setPriority(10, des1);
++      admin.modifyTable(Bytes.toBytes("Table_C"), des1);
++      admin.enableTable("Table_C");
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++
++    PriorityHBaseServer.refreshCache();
++    try {
++      Thread.currentThread().sleep(3000);
++    } catch (InterruptedException e1) {
++    }
++    Worker A[] = new Worker[threadN / 3];
++    Worker B[] = new Worker[threadN / 3];
++    Worker C[] = new Worker[threadN / 3];
++
++    for (int i = 0; i < A.length; i++) {
++      try {
++        A[i] = new Worker(new HTable("Table_A"), method, rowNubmer * 3
++            / threadN);
++        B[i] = new Worker(new HTable("Table_B"), method, rowNubmer * 3
++            / threadN);
++        C[i] = new Worker(new HTable("Table_C"), method, rowNubmer * 3
++            / threadN);
++      } catch (IOException e) {
++      }
++    }
++    for (int i = 0; i < A.length; i++) {
++      A[i].setTalbePriority(1);
++      B[i].setTalbePriority(5);
++      C[i].setTalbePriority(10);
++      A[i].start();
++      B[i].start();
++      C[i].start();
++    }
++    verifyFunction(A, B, C);
++
++    try {
++      admin.disableTable("Table_A");
++      HTableDescriptor des1 = admin
++          .getTableDescriptor(Bytes.toBytes("Table_A"));
++      des1.setValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS,
++          new ActionPriorities(0, 0, 0, 0).toBytes());
++      des1 = PriorityHBaseServer.setPriority(10, des1);
++      admin.modifyTable(Bytes.toBytes("Table_A"), des1);
++      admin.enableTable("Table_A");
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++    try {
++      admin.disableTable("Table_B");
++      HTableDescriptor des1 = admin
++          .getTableDescriptor(Bytes.toBytes("Table_B"));
++      des1.setValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS,
++          new ActionPriorities(0, 0, 0, 0).toBytes());
++      des1 = PriorityHBaseServer.setPriority(5, des1);
++      admin.modifyTable(Bytes.toBytes("Table_B"), des1);
++      admin.enableTable("Table_B");
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++    try {
++      admin.disableTable("Table_C");
++      HTableDescriptor des1 = admin
++          .getTableDescriptor(Bytes.toBytes("Table_C"));
++      des1.setValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS,
++          new ActionPriorities(0, 0, 0, 0).toBytes());
++      des1 = PriorityHBaseServer.setPriority(1, des1);
++      admin.modifyTable(Bytes.toBytes("Table_C"), des1);
++      admin.enableTable("Table_C");
++    } catch (Exception e) {
++      LOG.info(e);
++    }
++
++    PriorityHBaseServer.refreshCache();
++    try {
++      Thread.currentThread().sleep(3000);
++    } catch (InterruptedException e1) {
++    }
++    A = new Worker[threadN / 3];
++    B = new Worker[threadN / 3];
++    C = new Worker[threadN / 3];
++    for (int i = 0; i < A.length; i++) {
++      try {
++        A[i] = new Worker(new HTable("Table_A"), method, rowNubmer * 3
++            / threadN);
++        B[i] = new Worker(new HTable("Table_B"), method, rowNubmer * 3
++            / threadN);
++        C[i] = new Worker(new HTable("Table_C"), method, rowNubmer * 3
++            / threadN);
++      } catch (IOException e) {
++      }
++    }
++    for (int i = 0; i < A.length; i++) {
++      A[i].setTalbePriority(10);
++      B[i].setTalbePriority(5);
++      C[i].setTalbePriority(1);
++      A[i].start();
++      B[i].start();
++      C[i].start();
++    }
++    verifyFunction(C, B, A);
++
++  }
++
++  public static void main(String args[]) {
++    junit.textui.TestRunner.run(TestForTablePriority.class);
++  }
++
++  static byte[] b;
++  static {
++    String bs = "";
++    for (int i = 0; i < 100; i++) {
++      bs += i;
++    }
++    b = Bytes.toBytes(bs);
++  }
++
++  private static void put(HTable t, long i) {
++    Put p = new Put(
++        Bytes.toBytes("" + r.nextInt(1000) + (i) + r.nextInt(10000)));
++    p.add(Bytes.toBytes("ff"), Bytes.toBytes("ff"), b);
++    try {
++      t.put(p);
++    } catch (IOException e) {
++      LOG.info(e);
++    }
++  }
++
++}

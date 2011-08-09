@@ -1,0 +1,1354 @@
+diff -uNr trunk/src/main/java/org/apache/hadoop/hbase/ipc/HBaseRPC.java trunk_pri/src/main/java/org/apache/hadoop/hbase/ipc/HBaseRPC.java
+--- src/main/java/org/apache/hadoop/hbase/ipc/HBaseRPC.java	(revision 1155226)
++++ src/main/java/org/apache/hadoop/hbase/ipc/HBaseRPC.java	(working copy)
+@@ -374,6 +374,10 @@
+                                  final int numHandlers,
+                                  int metaHandlerCount, final boolean verbose, Configuration conf, int highPriorityLevel)
+     throws IOException {
++    if(instance instanceof HRegionInterface&&conf.getBoolean("hbase.tablepriority.enable", true))
++    {
++      return new PriorityHBaseServer(instance, ifaces, conf, bindAddress, port, numHandlers, metaHandlerCount, verbose, highPriorityLevel);
++    }
+     return getServer(instance.getClass(), instance, ifaces, bindAddress, port, numHandlers, metaHandlerCount, verbose, conf, highPriorityLevel);
+   }
+diff -uNr trunk/src/main/java/org/apache/hadoop/hbase/ipc/HBaseServer.java trunk_pri/src/main/java/org/apache/hadoop/hbase/ipc/HBaseServer.java
+--- src/main/java/org/apache/hadoop/hbase/ipc/HBaseServer.java	(revision 1155226)
++++ src/main/java/org/apache/hadoop/hbase/ipc/HBaseServer.java	(working copy)
+@@ -247,7 +247,7 @@
+   }
+ 
+   /** A call queued for handling. */
+-  private class Call implements Delayable {
++  class Call implements Delayable {
+     protected int id;                             // the client's call id
+     protected Writable param;                     // the parameter passed
+     protected Connection connection;              // connection to client
+@@ -1184,7 +1184,7 @@
+   }
+ 
+   /** Handles queued calls . */
+-  private class Handler extends Thread {
++  class Handler extends Thread {
+     private final BlockingQueue<Call> myCallQueue;
+ 
+     public Handler(final BlockingQueue<Call> cq, int instanceNumber) {
+
+diff -uNr trunk/src/main/java/org/apache/hadoop/hbase/ipc/PriorityHBaseServer.java trunk_pri/src/main/java/org/apache/hadoop/hbase/ipc/PriorityHBaseServer.java
+--- src/main/java/org/apache/hadoop/hbase/ipc/PriorityHBaseServer.java	(revision 0)
++++ src/main/java/org/apache/hadoop/hbase/ipc/PriorityHBaseServer.java	(working copy)
+@@ -0,0 +1,721 @@
++/**
++ * Copyright 2007 The Apache Software Foundation
++ *
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.ipc;
++
++import java.io.IOException;
++import java.lang.reflect.Field;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.concurrent.BlockingQueue;
++import java.util.concurrent.ConcurrentHashMap;
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.HRegionInfo;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.client.Action;
++import org.apache.hadoop.hbase.client.Delete;
++import org.apache.hadoop.hbase.client.Get;
++import org.apache.hadoop.hbase.client.HBaseAdmin;
++import org.apache.hadoop.hbase.client.MetaScanner;
++import org.apache.hadoop.hbase.client.MultiAction;
++import org.apache.hadoop.hbase.client.Put;
++import org.apache.hadoop.hbase.client.Row;
++import org.apache.hadoop.hbase.io.HbaseObjectWritable;
++import org.apache.hadoop.hbase.ipc.Invocation;
++import org.apache.hadoop.hbase.ipc.WritableRpcEngine.Server;
++import org.apache.hadoop.hbase.regionserver.HRegion;
++import org.apache.hadoop.hbase.regionserver.HRegionServer;
++import org.apache.hadoop.hbase.regionserver.InternalScanner;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.io.Writable;
++import org.apache.hadoop.ipc.VersionedProtocol;
++
++/**
++ * An abstract IPC service. IPC calls take a single {@link Writable} as a
++ * parameter, and return a {@link Writable} as their value. A service runs on a
++ * port and is defined by a parameter class and a value class.
++ * 
++ * Extends HBaseServer,and add schedule function to make table priority take
++ * effect.
++ */
++public class PriorityHBaseServer extends Server {
++
++  public final static byte[] PRI_KEY = Bytes.toBytes("priority");
++  public final static byte[] PRI_KEY_ACTION_PLUS = Bytes.toBytes("action_plus");
++  public static final int LOWEST_PRI = 10;
++  public static final int DEFAULT_PRI = 5;
++  public static final int HIGHEST_PRI = -10;
++  public static final int HIGH_PRI = 0;
++  /**
++   * priority refresh interval
++   */
++  private static int initInter = 120000;
++
++  /**
++   * the priority map,cache the region table and scanner's priority in memory.
++   */
++  private static Map<String, InternalScanner> scannersMap;
++  private final static ConcurrentHashMap<String, Integer> regionPriMap = new ConcurrentHashMap<String, Integer>();
++  private final static ConcurrentHashMap<String, Integer> tablePriMap = new ConcurrentHashMap<String, Integer>();
++  private final static ConcurrentHashMap<Long, String> scannerPriMap = new ConcurrentHashMap<Long, String>();
++  private final static ConcurrentHashMap<Long, Integer> scannerPriMapInteger = new ConcurrentHashMap<Long, Integer>();
++
++  private final static ConcurrentHashMap<String, ActionPriorities> tableActionPriorities = new ConcurrentHashMap<String, ActionPriorities>();
++  private final static ConcurrentHashMap<String, ActionPriorities> regionActionPriorities = new ConcurrentHashMap<String, ActionPriorities>();
++
++  // TODO: add priority of source host.
++  @SuppressWarnings("unused")
++  private final static ConcurrentHashMap<String, HashMap<String, Integer>> tableSourceHostPlus = new ConcurrentHashMap<String, HashMap<String, Integer>>();
++  @SuppressWarnings("unused")
++  private final static ConcurrentHashMap<String, HashMap<String, Integer>> regionSourceHostPlus = new ConcurrentHashMap<String, HashMap<String, Integer>>();
++
++  protected BlockingQueue callQueue;
++  public static final Log LOG = LogFactory
++      .getLog("org.apache.hadoop.ipc.ScheduleHBaseServer");
++  protected static final ThreadLocal<PriorityHBaseServer> SERVER = new ThreadLocal<PriorityHBaseServer>();
++  private Object instance;
++  private Handler[] handlersChild = null;
++  private int[] priorityArray;// used to initiate the handler's priority.
++  public static Configuration conf;
++  protected static HBaseAdmin admin = null;
++  private static boolean serverRun = true;
++
++  /**
++   * Construct an RPC server.
++   * 
++   * @param instance
++   *          the instance whose methods will be called
++   * @param conf
++   *          the configuration to use
++   * @param bindAddress
++   *          the address to bind on to listen for connection
++   * @param port
++   *          the port to listen for connections on
++   * @param numHandlers
++   *          the number of method handler threads to run
++   * @param verbose
++   *          whether each call should be logged
++   * @throws IOException
++   *           e
++   */
++  public PriorityHBaseServer(Object instance, final Class<?>[] ifaces,
++      Configuration conf, String bindAddress, int port, int numHandlers,
++      int metaHandlerCount, boolean verbose, int highPriorityLevel)
++      throws IOException {
++    super(instance, ifaces, conf, bindAddress, port, numHandlers,
++        metaHandlerCount, verbose, highPriorityLevel);
++    this.conf = conf;
++    int maxQueueSize = this.conf.getInt("ipc.server.max.queue.size", 500);
++    initInter = this.conf.getInt("ipc.priority.refresh.interval", 120000);
++    Field f;
++    try {
++      f = super.getClass().getSuperclass().getSuperclass()
++          .getDeclaredField("callQueue");
++      f.setAccessible(true);
++      callQueue = new PriorityJobQueue<Call>(maxQueueSize,
++          numHandlers >= 10 ? 10 : numHandlers, this);
++      f.set(this, this.callQueue);
++      f = instance.getClass().getDeclaredField("scanners");
++      f.setAccessible(true);
++      scannersMap = (Map<String, InternalScanner>) f.get(instance);
++    } catch (Exception e) {
++      LOG.error(e);
++    }
++    this.instance = instance;
++    this.admin = new HBaseAdmin(this.conf);
++  }
++
++  /**
++   * get action priorities from table descriptor
++   * 
++   * @param des
++   *          the table descriptor
++   * @return
++   */
++  public static ActionPriorities getTableActionPlus(HTableDescriptor des) {
++    byte[] plus = des.getValue(PRI_KEY_ACTION_PLUS);
++    ActionPriorities ret = new ActionPriorities();
++    if (plus != null) {
++      try {
++        ret.fromBytes(plus);
++      } catch (Exception e) {
++        LOG.error("This table has  wrong action priorities, please use ActionPriorities to set this");
++      }
++      return ret;
++    }
++    return ret;
++  }
++
++  /**
++   * Initiate the region priority
++   * 
++   * @param regions
++   *          the region want to get priority
++   * @param force
++   *          force refresh priority,if true will get priority from table
++   *          descriptor.
++   * @return the region priority
++   */
++
++  @SuppressWarnings("unused")
++  private int initRegionPriority(byte[] regions, boolean force) {
++    String region = Bytes.toString(regions);
++    return this.initRegionPriority(region, force);
++
++  }
++
++  /**
++   * Get the priority of the call
++   * 
++   * @param call
++   * @return the priority
++   */
++  protected int getCallPriority(Call call) {
++    Invocation invo = (Invocation) call.param;
++    if (invo.getMethodName().endsWith("next")) {
++      Long scanN = (Long) invo.getParameters()[0];
++      Integer pri = scannerPriMapInteger.get(scanN);
++      if (pri == null) {
++        String regionN = scannerPriMap.get(scanN);
++        if (regionN != null) {
++          pri = getRegionPri(regionN);
++          ActionPriorities action = regionActionPriorities.get(regionN);
++          if (action != null) {
++            pri += action.getScanPlus();
++          }
++          scannerPriMapInteger.put(scanN, pri);
++          return pri;
++        } else {
++          LOG.error("error,there is no this scanner id");
++          return DEFAULT_PRI;
++        }
++      }
++      return pri;
++    } else if (invo.getMethodName().endsWith("multi")) {
++      MultiAction<?> multi = (MultiAction<?>) invo.getParameters()[0];
++      for (Map.Entry e : multi.actions.entrySet()) {
++        String regionN = Bytes.toString((byte[]) e.getKey());
++        Integer pri = getRegionPri(regionN);
++        ActionPriorities plus;
++        if ((plus = regionActionPriorities.get(regionN)) != null) {
++          List<Action> actionsForRegion = (List<Action>) e.getValue();
++          Action action = actionsForRegion.get(0);
++          if (action != null) {
++            Row row = action.getAction();
++            if (row instanceof Delete) {
++              pri += plus.getDeletePlus();
++
++            } else if (row instanceof Get) {
++              pri += plus.getGetPlus();
++
++            } else if (row instanceof Put) {
++              pri += plus.getPutPlus();
++            }
++          }
++        }
++        return pri;
++      }
++      return DEFAULT_PRI;
++    } else if (invo.getMethodName().endsWith("put")
++        || invo.getMethodName().endsWith("increment")
++        || invo.getMethodName().endsWith("incrementColumnValue")) {
++      byte[] region = (byte[]) invo.getParameters()[0];
++      String regionN = Bytes.toString(region);
++      Integer pri = getRegionPri(regionN);
++      ActionPriorities plus;
++      if ((plus = regionActionPriorities.get(regionN)) != null) {
++        pri += plus.getPutPlus();
++      }
++      return pri;
++    } else if (invo.getMethodName().endsWith("get")
++        || invo.getMethodName().endsWith("checkAndPut")) {
++      byte[] region = (byte[]) invo.getParameters()[0];
++      String regionN = Bytes.toString(region);
++      Integer pri = getRegionPri(regionN);
++      ActionPriorities plus;
++      if ((plus = regionActionPriorities.get(regionN)) != null) {
++        pri += plus.getGetPlus();
++      }
++      return pri;
++    } else if (invo.getMethodName().endsWith("delete")
++        || invo.getMethodName().endsWith("checkAndDelete")) {
++      byte[] region = (byte[]) invo.getParameters()[0];
++      String regionN = Bytes.toString(region);
++      Integer pri = getRegionPri(regionN);
++      ActionPriorities plus;
++      if ((plus = regionActionPriorities.get(regionN)) != null) {
++        pri += plus.getDeletePlus();
++      }
++      return pri;
++
++    } else {
++      return HIGH_PRI;
++    }
++  }
++
++  private int getRegionPri(String regionN) {
++    Integer pri = regionPriMap.get(regionN);
++    if (pri == null) {
++      pri = initRegionPriority(regionN, false);
++    }
++    if (pri == null)
++      return DEFAULT_PRI;
++    return pri;
++  }
++
++  /**
++   * Initiate the region priority
++   * 
++   * @param regions
++   *          the region want to get priority
++   * @param force
++   *          force refresh priority,if true will get priority from table
++   *          descriptor.
++   * @return the region priority
++   */
++  private int initRegionPriority(String region, boolean force) {
++    if (!force) {
++      Integer ret = regionPriMap.get(region);
++      if (ret != null)
++        return ret;
++    }
++    Integer prii;
++    int pri = DEFAULT_PRI;
++    HRegion hr = ((HRegionServer) this.instance).getOnlineRegion(Bytes
++        .toBytes(region));
++
++    if (hr != null) {
++      if (hr.getRegionInfo().isMetaRegion()
++          || hr.getRegionInfo().isRootRegion()) {
++        pri = HIGHEST_PRI;
++        regionPriMap.put(region, pri);
++        return pri;
++      }
++      String tableName = hr.getTableDesc().getNameAsString();
++      prii = tablePriMap.get(tableName);
++      if (prii == null) {
++        if (hr.getTableDesc().getValue(PRI_KEY) != null) {
++          try {
++
++            pri = Integer.parseInt(Bytes.toString(hr.getTableDesc().getValue(
++                PRI_KEY)));
++          } catch (Exception e) {
++            LOG.error("Table " + hr.getTableDesc().getNameAsString()
++                + " has a wrong priority");
++          }
++        }
++        tablePriMap.put(tableName, pri);
++      } else {
++        pri = prii;
++      }
++    } else {
++      LOG.error("error this is no this region" + region);
++    }
++    regionPriMap.put(region, pri);
++    if (regionActionPriorities.get(region) == null) {
++      if (hr != null) {
++        ActionPriorities plus = this.getTableActionPlus(hr.getTableDesc());
++        regionActionPriorities.put(region, plus);
++      }
++    }
++    return pri;
++  }
++
++  /**
++   * Initiate the scanner's priority,invoked by openscanner
++   * 
++   * @param call
++   * @param value
++   *          scanner id
++   */
++  private void initScannerPriority(Invocation call, Object value) {
++    Long id = (Long) value;
++    byte[] region = (byte[]) call.getParameters()[0];
++    String regionN = Bytes.toString(region);
++    Integer prii = regionPriMap.get(regionN);
++    if (prii == null) {
++      this.initRegionPriority(regionN, false);
++    }
++    scannerPriMap.put(id, regionN);
++  }
++
++  public static void refreshCache() {
++    priorityIniter.interrupt();
++  }
++
++  private static Thread priorityIniter = new Thread() {
++
++    public void run() {
++      while (serverRun) {
++        try {
++          sleep(initInter);
++        } catch (InterruptedException e) {
++          // ignore exceptions
++        }
++        refreshPriority();
++      }
++
++    }
++  };
++
++  @Override
++  public void start() {
++    super.start();
++    serverRun = true;
++    this.priorityIniter.setDaemon(true);
++    this.priorityIniter.start();
++
++  }
++
++  private static void refreshTablePriority() {
++    HTableDescriptor[] dess;
++    try {
++      dess = admin.listTables();
++    } catch (IOException e) {
++      LOG.error(e);
++      return;
++    }
++    Integer pri = DEFAULT_PRI;
++    for (HTableDescriptor des : dess) {
++      pri = DEFAULT_PRI;
++      byte[] prib = des.getValue(PRI_KEY);
++      if (prib != null)
++        try {
++          pri = Integer.parseInt(Bytes.toString((prib)));
++        } catch (Exception e) {
++          LOG.error("table priority error :" + Bytes.toString(prib)
++              + " table name:" + des.getNameAsString());
++        }
++      ActionPriorities actionPlus = getTableActionPlus(des);
++
++      tablePriMap.put(des.getNameAsString(), pri);
++      tableActionPriorities.put(des.getNameAsString(), actionPlus);
++    }
++  }
++
++  private static void refreshRegionPriority() {
++    Integer pri = DEFAULT_PRI;
++    List<HRegionInfo> list = null;
++    try {
++      list = MetaScanner.listAllRegions(conf);
++    } catch (IOException e) {
++      LOG.error(e);
++    }
++    for (HRegionInfo region : list) {
++      pri = DEFAULT_PRI;
++      String tableN = Bytes.toString(HRegionInfo.getTableName(region
++          .getRegionName()));
++      Integer priT = tablePriMap.get(tableN);
++      if (priT != null) {
++        pri = priT;
++      }
++      ActionPriorities actionPlus = tableActionPriorities.get(tableN);
++      if (actionPlus == null) {
++        actionPlus = new ActionPriorities();
++      }
++      regionActionPriorities.put(region.getRegionNameAsString(), actionPlus);
++      regionPriMap.put(region.getRegionNameAsString(), pri);
++    }
++  }
++
++  /**
++   * Initiate priorities.
++   */
++  private static void refreshPriority() {
++    refreshTablePriority();
++    refreshRegionPriority();
++    for (Long id : scannerPriMap.keySet()) {
++      if (scannersMap.get(String.valueOf(id)) == null) {
++        scannerPriMap.remove(id);
++      }
++    }
++    for (Long id : scannerPriMapInteger.keySet()) {
++      if (scannersMap.get(String.valueOf(id)) == null) {
++        scannerPriMapInteger.remove(id);
++      }
++    }
++  }
++
++  /**
++   * translate thread priority to system priority
++   * 
++   * @param tpri
++   * @return
++   */
++  public static int priTrans(int tpri) {
++    switch (tpri) {
++    case 10:
++      return 1;
++    case 9:
++      return 2;
++    case 8:
++      return 3;
++    case 7:
++      return 4;
++    case 6:
++      return 5;
++    case 5:
++      return 6;
++    case 4:
++      return 7;
++    case 3:
++      return 8;
++    case 2:
++      return 9;
++    case 1:
++      return 10;
++    default:
++      return 5;
++    }
++  }
++
++  private void initPriorityArray(int handleSize) {
++    priorityArray = new int[handleSize];
++    int minPriOfTurn = 1;
++    for (int i = 0, priNow = 10; i < handleSize; i++, priNow--) {
++      if (priNow < minPriOfTurn) {
++        priNow = 10;
++        minPriOfTurn++;
++        if (minPriOfTurn == 10) {
++          minPriOfTurn = 1;
++        }
++      }
++      priorityArray[i] = priNow;
++    }
++  }
++
++  /**
++   * start Threads and set priority of handlers
++   */
++  @Override
++  public synchronized void startThreads() {
++    super.startThreads();
++
++    Field f;
++    try {
++      f = super.getClass().getSuperclass().getSuperclass()
++          .getDeclaredField("handlers");
++      f.setAccessible(true);
++      this.handlersChild = (Handler[]) f.get(this);
++    } catch (Exception e) {
++      LOG.error(e);
++    }
++    initPriorityArray(handlersChild.length);
++    for (int i = 0; i < this.handlersChild.length; i++) {
++      handlersChild[i].setPriority(priorityArray[i]);
++
++    }
++  }
++
++  /** Stops the service. No new calls will be handled after this is called. */
++  @SuppressWarnings("unchecked")
++  @Override
++  public synchronized void stop() {
++    super.stop();
++    serverRun = false;
++    if (this.priorityIniter != null) {
++      this.priorityIniter.interrupt();
++    }
++    /**
++     * added here to stop the priority refresher.
++     */
++    ((PriorityJobQueue<Call>) this.callQueue).stop();
++  }
++
++  @Override
++  public Writable call(Class<? extends VersionedProtocol> protocol,
++      Writable param, long receivedTime) throws IOException {
++    Invocation call = (Invocation) param;
++    HbaseObjectWritable writable = (HbaseObjectWritable) super.call(protocol,
++        param, receivedTime);
++    if (call.getMethodName().endsWith("openScanner")) {
++      this.initScannerPriority(call, writable.get());
++    }
++    return writable;
++  }
++
++  /**
++   * 
++   * class used to store the action priority of table;
++   * 
++   */
++  public static class ActionPriorities {
++    int putPlus = 0;
++    int getPlus = 0;
++    int deletePlus = 0;
++    int scanPlus = 0;
++
++    public ActionPriorities() {
++
++    }
++
++    public ActionPriorities(int scanPlus, int putPlus, int getPlus,
++        int deletePlus) {
++      this.scanPlus = scanPlus;
++      this.putPlus = putPlus;
++      this.getPlus = getPlus;
++      this.deletePlus = deletePlus;
++    }
++
++    /**
++     * get put priority plus
++     * 
++     * @return
++     */
++    public int getPutPlus() {
++      return putPlus;
++    }
++
++    /**
++     * set put priority plus
++     * 
++     * @return
++     */
++    public void setPutPlus(int putPlus) {
++      this.putPlus = putPlus;
++    }
++
++    /**
++     * get get priority plus
++     * 
++     * @return
++     */
++    public int getGetPlus() {
++      return getPlus;
++    }
++
++    /**
++     * set get priority plus
++     * 
++     * @return
++     */
++    public void setGetPlus(int getPlus) {
++      this.getPlus = getPlus;
++    }
++
++    /**
++     * get delete priority plus
++     * 
++     * @return
++     */
++    public int getDeletePlus() {
++      return deletePlus;
++    }
++
++    /**
++     * set delete priority plus
++     * 
++     * @return
++     */
++    public void setDeletePlus(int deletePlus) {
++      this.deletePlus = deletePlus;
++    }
++
++    /**
++     * get scan priority plus
++     * 
++     * @return
++     */
++    public int getScanPlus() {
++      return scanPlus;
++    }
++
++    /**
++     * set scan priority plus
++     * 
++     * @return
++     */
++    public void setScanPlus(int scanPlus) {
++      this.scanPlus = scanPlus;
++    }
++
++    public String toString() {
++      return this.scanPlus + "," + this.putPlus + "," + this.getPlus + ","
++          + this.deletePlus + ",";
++    }
++
++    /**
++     * store this object into byte[]
++     * 
++     * @return
++     */
++    public byte[] toBytes() {
++      byte[] ret = new byte[Bytes.SIZEOF_INT * 4];
++      Bytes.putInt(ret, 0, this.scanPlus);
++      Bytes.putInt(ret, Bytes.SIZEOF_INT, this.putPlus);
++      Bytes.putInt(ret, Bytes.SIZEOF_INT * 2, this.getPlus);
++      Bytes.putInt(ret, Bytes.SIZEOF_INT * 3, this.deletePlus);
++      return ret;
++    }
++
++    /**
++     * get initiate value from byte[]
++     * 
++     * @param b
++     */
++    public ActionPriorities fromBytes(byte[] b) {
++      if (b.length != Bytes.SIZEOF_INT * 4)
++        return null;
++      else {
++        this.scanPlus = Bytes.toInt(b, 0);
++        this.putPlus = Bytes.toInt(b, Bytes.SIZEOF_INT);
++        this.getPlus = Bytes.toInt(b, Bytes.SIZEOF_INT * 2);
++        this.deletePlus = Bytes.toInt(b, Bytes.SIZEOF_INT * 3);
++      }
++      return this;
++    }
++  }
++
++  /**
++   * Set table priority
++   * 
++   * @param priority
++   * @param des
++   * @return
++   * @throws Exception
++   */
++  public static HTableDescriptor setPriority(String priority,
++      HTableDescriptor des) throws Exception {
++
++    Integer pri = Integer.parseInt(priority);
++    if (pri < 0 || pri > 10)
++      throw new NumberFormatException("table priority should between 0 and 10");
++    des.setValue(PriorityHBaseServer.PRI_KEY, Bytes.toBytes(priority));
++    return des;
++  }
++
++  /**
++   * Set table priority
++   * 
++   * @param priority
++   * @param des
++   * @return
++   * @throws Exception
++   */
++  public static HTableDescriptor setPriority(int priority, HTableDescriptor des)
++      throws Exception {
++    if (priority < 0 || priority > 10)
++      throw new NumberFormatException("table priority should between 0 and 10");
++    des.setValue(PriorityHBaseServer.PRI_KEY, Bytes.toBytes(priority + ""));
++    return des;
++  }
++}
+
+diff -uNr trunk/src/main/java/org/apache/hadoop/hbase/ipc/PriorityJobQueue.java trunk_pri/src/main/java/org/apache/hadoop/hbase/ipc/PriorityJobQueue.java
+--- src/main/java/org/apache/hadoop/hbase/ipc/PriorityJobQueue.java	(revision 0)
++++ src/main/java/org/apache/hadoop/hbase/ipc/PriorityJobQueue.java	(working copy)
+@@ -0,0 +1,589 @@
++/**
++ * Copyright 2010 The Apache Software Foundation
++ *
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.ipc;
++
++import java.util.Calendar;
++import java.util.Collection;
++import java.util.Iterator;
++import java.util.Random;
++import java.util.concurrent.BlockingQueue;
++import java.util.concurrent.PriorityBlockingQueue;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.locks.Condition;
++import java.util.concurrent.locks.ReentrantLock;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++
++/**
++ * This queue is used by {@link PriorityHBaseServer} In this queue,generally
++ * thread can only get jobs which has equal or higher priority than its thread
++ * priority.<br>
++ * The thread which has the lowest priority can handle the jobs which has a
++ * lower priorities than the lowest priority. Please use take and put to
++ * manipulate this queue.<br>
++ * 
++ * @param <T>
++ *          the class contained by the queue
++ */
++public class PriorityJobQueue<T> implements BlockingQueue {
++  private static final Log LOG = LogFactory.getLog(PriorityJobQueue.class);
++  private final PriorityBlockingQueue<Job<T>> queue = new PriorityBlockingQueue<Job<T>>();
++  private int size = 0;
++  private int capacity = 100;
++  private int maxWait = 1000;
++  private boolean running = true;
++  private PriorityHBaseServer server;
++  ReentrantLock readLock = new ReentrantLock();
++  Condition[] lockList = new Condition[10];
++  ReentrantLock addLock = new ReentrantLock();
++  Condition queueFull = addLock.newCondition();
++  int lowestThreadPriority = 10;
++  private static int handleFreshInter = 6;
++  private static int move = Integer.SIZE - handleFreshInter;
++  private static int flush = 1;
++  private long[] PriorityAddTimes = new long[10];
++  private long[] PriorityGetTimes = new long[10];
++
++  /**
++   * get static data of add times
++   * 
++   * @return the add times arranged by priority
++   */
++  public long[] getPriorityAddTimes() {
++    return PriorityAddTimes;
++  }
++
++  /**
++   * get static data of get times
++   * 
++   * @return the get times arranged by priority
++   */
++
++  public long[] getPriorityGetTimes() {
++    return PriorityGetTimes;
++  }
++
++  private void setSize(int size) {
++    this.addLock.lock();
++    this.size = size;
++    if (this.size < this.capacity) {
++      this.queueFull.signalAll();
++    }
++    this.addLock.unlock();
++  }
++
++  private void addSize() {
++    this.addLock.lock();
++    this.size++;
++    this.addLock.unlock();
++  }
++
++  private void decreaseSize() {
++    this.addLock.lock();
++    this.size--;
++    if (this.size < this.capacity) {
++      this.queueFull.signalAll();
++    }
++    this.addLock.unlock();
++  }
++
++  private void tryAdd(Job<T> j) {
++    int wait = 0;
++    while (this.size >= this.capacity) {
++      try {
++        addLock.lock();
++        this.queueFull.await(10, TimeUnit.MILLISECONDS);
++        // this.queueFull.await();
++        addLock.unlock();
++        wait++;
++        this.size=this.queue.size();
++        if (wait > this.maxWait)
++          break;
++      } catch (InterruptedException e) {
++        // ignore this exception
++      }
++    }
++    addLock.lock();
++    this.queue.add(j);
++    this.addSize();
++    addLock.unlock();
++  }
++
++  private Thread refresher = new Thread() {
++    public void run() {
++      while (running) {
++        refreshIner();
++        try {
++          sleep(1000);
++        } catch (InterruptedException e) {
++          // ignore this exception
++        } catch (Exception e) {
++          LOG.error(e);
++        }
++      }
++    }
++  };
++
++  public void stop() {
++    this.running = false;
++    this.refresher.interrupt();
++  }
++
++  /**
++   * Initiate a queue
++   * 
++   * @param capacity
++   *          the capacity of the queue,not a precision value,if queue size
++   *          exceed this value, workers which add jobs should wait
++   * @param lowestThreadPriority
++   *          the lowest priority which worker thread hold,the default priority
++   *          is range from 1 to 10,reverse from java thread priority
++   * @param server
++   *          The instance of PriorityHBaseServer
++   */
++  public PriorityJobQueue(int capacity, int lowestThreadPriority,
++      PriorityHBaseServer server) {
++    if (server != null) {
++      handleFreshInter = server.conf.getInt("hbase.schedule.refreshinter", 7);
++    } else {
++      handleFreshInter = 7;
++    }
++    move = Integer.SIZE - handleFreshInter;
++    this.capacity = capacity;
++    this.refresher.setDaemon(true);
++    this.refresher.start();
++    for (int i = 0; i < 10; i++) {
++      lockList[i] = readLock.newCondition();
++    }
++    this.lowestThreadPriority = lowestThreadPriority;
++    this.server = server;
++  }
++
++  /**
++   * add a job to this queue
++   * 
++   * @param call
++   *          the job instance
++   * @param pri
++   *          the job's priority
++   */
++  public void add(T call, int pri) {
++    this.tryAdd(new Job<T>(pri, call));
++    singalHandler();
++    synchronized (this.PriorityAddTimes) {
++      this.PriorityAddTimes[this.getCondition(pri)]++;
++    }
++
++  }
++
++  /**
++   * get the size of the queue,maintain a integer to indicate the size for
++   * performance.
++   * 
++   * @return the size of the queue
++   */
++  public int size() {
++    return this.queue.size();
++  }
++
++  /**
++   * get the size of the queue
++   * 
++   * @return the size of the queue
++   */
++  public int queueSize() {
++    return queue.size();
++  }
++
++  private int getCondition(int pri) {
++    if (pri <= 10 && pri >= 1) {
++      return pri - 1;
++    } else if (pri > 10) {
++      return 9;
++    } else {
++      return 0;
++    }
++  }
++
++  private void singalHandler() {
++    readLock.lock();
++    Job<T> jobt = queue.peek();
++    if (jobt != null) {
++      this.lockList[getCondition(jobt.orgPri)].signal();
++    }
++    readLock.unlock();
++  }
++
++  /**
++   * if handler's priority lower than job's priority, then this handler can't
++   * get this job.
++   * 
++   * @param job
++   *          the job which worker want to get
++   * @param pri
++   *          the worker thread's priority
++   * @return should the worker get this job
++   */
++  public boolean shouldWork(Job<T> job, int pri) {
++    if (job == null)
++      return false;
++    return (pri >= job.orgPri)
++        || (job.orgPri < 1 && pri == 1)
++        || (job.orgPri > this.lowestThreadPriority && pri == this.lowestThreadPriority);
++  }
++
++  /**
++   * get a job from the queue ,will test whether the thread can get this job
++   * 
++   * @param pri
++   *          the worker thread's priority
++   * @return the job
++   * @throws InterruptedException
++   */
++  public T get(int pri) throws InterruptedException {
++    Job<T> ret = null;
++    while (true) {
++      readLock.lock();
++      ret = queue.peek();
++      if (shouldWork(ret, pri)) {
++        ret = queue.take();
++        readLock.unlock();
++        break;
++      }
++      this.lockList[getCondition(pri)].await(100, TimeUnit.MILLISECONDS);
++      readLock.unlock();
++      if (ret == null) {
++        this.setSize(0);
++      }
++    }
++    if (ret.orgPri > pri && pri != this.lowestThreadPriority) {
++      LOG.error("The handle get a job priority is lower than its priority,this shouldn't happen"
++          + " job priority:" + ret.orgPri + " handler pri:" + pri);
++    }
++    this.singalHandler();
++    synchronized (this.PriorityGetTimes) {
++      this.PriorityGetTimes[this.getCondition(ret.orgPri)]++;
++    }
++    this.decreaseSize();
++    return ret.getCall();
++
++  }
++
++  public void printMetrix() {
++    LOG.info("size is :" + this.size);
++    // this.size = this.queue.size();
++    LOG.info("capacity is :" + this.capacity);
++    String out = "Add times";
++    for (int i = 0; i < this.PriorityAddTimes.length; i++) {
++      out += "  pri:" + (i + 1) + ":" + this.PriorityAddTimes[i];
++    }
++    LOG.info("priority request static:" + out);
++    out = "Get times";
++    for (int i = 0; i < this.PriorityGetTimes.length; i++) {
++      out += "  pri:" + (i + 1) + ":" + this.PriorityGetTimes[i];
++    }
++    LOG.info("priority request static:" + out);
++  }
++
++  /**
++   * refresh the priorities of the jobs in queue,simply -1
++   */
++  public void refresh() {
++    this.refresher.interrupt();
++  }
++
++  static int outputIndicator = 0;
++
++  private void refreshIner() {
++    try {
++      // if (LOG.isDebugEnabled()) {
++      if ((outputIndicator << 55) >>> 55 == 0) {
++        LOG.debug(Calendar.getInstance().getTime() + ":" + this.queue);
++        this.printMetrix();
++      }
++      outputIndicator++;
++
++      for (Job<T> job : queue) {
++        if (job != null) {
++          job.add();
++        }
++      }
++      singalHandler();
++    } catch (Exception e) {
++      LOG.warn(e);
++    }
++  }
++
++  private void refreshIner(int n) {
++    try {
++      for (Job<T> job : queue) {
++        if (job != null) {
++          job.add(n);
++        }
++      }
++      singalHandler();
++    } catch (Exception e) {
++      LOG.warn(e);
++    }
++  }
++
++  /**
++   * 
++   * The Job hold by queue
++   * 
++   * @param <T>
++   */
++  public static class Job<T> implements Comparable<Job<T>> {
++    int orgPri = 0;
++    int priority = 0;
++    long initTime = 0;
++    T call;
++
++    /**
++     * get the priority now
++     * 
++     * @return the priority of this call
++     */
++    public int getPriority() {
++      return priority;
++    }
++
++    /**
++     * increase job's priority
++     */
++    public void add() {
++      this.priority--;
++    }
++
++    /**
++     * increase job's priority by n
++     * 
++     * @param n
++     */
++    public void add(int n) {
++
++      this.priority = this.priority - n;
++
++    }
++
++    /**
++     * get the instance hold by the job
++     * 
++     * @return the call instance
++     */
++    public T getCall() {
++      return call;
++    }
++
++    /**
++     * set the instance hold byt the job
++     * 
++     * @param call
++     *          the call instance
++     */
++    public void setCall(T call) {
++      this.call = call;
++    }
++
++    /**
++     * Initiate a job
++     * 
++     * @param pri
++     *          the job priority
++     * @param call
++     *          the instance hold by the job
++     */
++    public Job(int pri, T call) {
++      this.orgPri = pri;
++      this.priority = pri;
++      this.initTime = System.currentTimeMillis();
++      this.call = call;
++    }
++
++    /**
++     * print the job
++     */
++    public String toString() {
++
++      return "orgPri:" + this.orgPri + ", lastPri:" + this.priority
++          + ", wait time:" + ((System.currentTimeMillis() - this.initTime))
++          + ",ino:";// + call;
++    }
++
++    @Override
++    public int compareTo(Job<T> arg0) {
++      // TODO Auto-generated method stub
++      return this.priority - arg0.priority;
++    }
++
++  }
++
++  /**
++   * test the queue's function
++   * 
++   * @param args
++   */
++
++  @Override
++  public Object remove() {
++    return this.queue.remove();
++  }
++
++  @Override
++  public Object poll() {
++    return this.queue.poll();
++  }
++
++  @Override
++  public Object element() {
++    return this.queue.element();
++  }
++
++  @Override
++  public Object peek() {
++    return this.queue.peek();
++  }
++
++  @Override
++  public boolean isEmpty() {
++    return this.queue.isEmpty();
++  }
++
++  @SuppressWarnings({ "rawtypes" })
++  @Override
++  public Iterator iterator() {
++    return this.queue.iterator();
++  }
++
++  @Override
++  public Object[] toArray() {
++    return this.queue.toArray();
++  }
++
++  @Override
++  public Object[] toArray(Object[] a) {
++    return this.queue.toArray(a);
++  }
++
++  @SuppressWarnings({ "rawtypes" })
++  @Override
++  public boolean containsAll(Collection c) {
++    return this.queue.containsAll(c);
++  }
++
++  @SuppressWarnings({ "rawtypes", "unchecked" })
++  @Override
++  public boolean addAll(Collection c) {
++    return this.queue.addAll(c);
++  }
++
++  @SuppressWarnings({ "rawtypes" })
++  @Override
++  public boolean removeAll(Collection c) {
++    return this.queue.removeAll(c);
++  }
++
++  @SuppressWarnings({ "rawtypes" })
++  @Override
++  public boolean retainAll(Collection c) {
++    return this.queue.retainAll(c);
++  }
++
++  @Override
++  public void clear() {
++    this.queue.clear();
++  }
++
++  @Override
++  public boolean add(Object e) {
++    if (this.size > this.capacity)
++      return false;
++    else
++      try {
++        this.put(e);
++      } catch (InterruptedException e1) {
++        e1.printStackTrace();
++      }
++    return true;
++  }
++
++  @Override
++  public boolean offer(Object e) {
++    return this.offer(e);
++  }
++
++  @Override
++  public void put(Object e) throws InterruptedException {
++    HBaseServer.Call call = (HBaseServer.Call) (e);
++    int pri = this.server.getCallPriority(call);
++    this.add((T) call, pri);
++  }
++
++  @SuppressWarnings("unchecked")
++  @Override
++  public boolean offer(Object e, long timeout, TimeUnit unit)
++      throws InterruptedException {
++    return this.queue.offer((Job<T>) e, timeout, unit);
++  }
++
++  @Override
++  public Object take() throws InterruptedException {
++    if (((flush << move) >>> move) == 0) {
++      this.refresher.interrupt();
++    }
++    flush++;
++    return this.get(PriorityHBaseServer.priTrans(Thread.currentThread()
++        .getPriority()));
++  }
++
++  @Override
++  public Object poll(long timeout, TimeUnit unit) throws InterruptedException {
++    return this.get(this.server.priTrans(Thread.currentThread().getPriority()));
++  }
++
++  @Override
++  public int remainingCapacity() {
++    return this.capacity - this.size;
++  }
++
++  @Override
++  public boolean remove(Object o) {
++    return this.queue.remove(o);
++  }
++
++  @Override
++  public boolean contains(Object o) {
++    return this.queue.contains(o);
++  }
++
++  @SuppressWarnings("unchecked")
++  @Override
++  public int drainTo(@SuppressWarnings("rawtypes") Collection c) {
++    return this.queue.drainTo(c);
++  }
++
++  @SuppressWarnings({ "rawtypes", "unchecked" })
++  @Override
++  public int drainTo(Collection c, int maxElements) {
++    return this.queue.drainTo(c, maxElements);
++  }
++
++}

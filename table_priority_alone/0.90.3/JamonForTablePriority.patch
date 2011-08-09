@@ -1,0 +1,320 @@
+diff -uNr trunk/src/main/jamon/org/apache/hbase/tmpl/table/changepriority.jamon local/src/main/jamon/org/apache/hbase/tmpl/table/changepriority.jamon
+--- src/main/jamon/org/apache/hbase/tmpl/table/changepriority.jamon	(revision 0)
++++ src/main/jamon/org/apache/hbase/tmpl/table/changepriority.jamon	(working copy)
+@@ -0,0 +1,182 @@
++<%doc>
++Copyright 2011 The Apache Software Foundation
++
++Licensed to the Apache Software Foundation (ASF) under one
++or more contributor license agreements.  See the NOTICE file
++distributed with this work for additional information
++regarding copyright ownership.  The ASF licenses this file
++to you under the Apache License, Version 2.0 (the
++"License"); you may not use this file except in compliance
++with the License.  You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++</%doc>
++<%import>
++org.apache.hadoop.conf.Configuration;
++org.apache.hadoop.hbase.HBaseConfiguration;
++org.apache.hadoop.hbase.HTableDescriptor;
++org.apache.hadoop.hbase.MasterNotRunningException;
++org.apache.hadoop.hbase.ZooKeeperConnectionException;
++org.apache.hadoop.hbase.client.HBaseAdmin;
++org.apache.hadoop.hbase.ipc.PriorityHBaseServer;
++org.apache.hadoop.hbase.util.Bytes;
++</%import>
++<?xml version="1.0" encoding="UTF-8" ?>
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" 
++  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
++<html xmlns="http://www.w3.org/1999/xhtml">
++<head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/>
++<title>Change Priority</title>
++<link rel="stylesheet" type="text/css" href="/static/hbase.css" />
++</head>
++
++<body>
++<a id="logo" href="http://wiki.apache.org/lucene-hadoop/Hbase"><img src="/static/hbase_logo_med.gif" alt="HBase Logo" title="HBase Logo" /></a>
++<h1 id="page_title">Change Priority</h1>
++<p id="links_menu"><a href="/logs/">Local logs</a>, <a href="/stacks">Thread Dump</a>, <a href="/logLevel">Log Level</a></p>
++<hr id="head_rule" />
++<%java>
++		class ChangePriorityThread extends Thread {
++	        private HBaseAdmin admin;
++	        private String tablename;
++	        private String tablepri;
++	        private String scanpri;
++	        private String putpri;
++	        private String getpri;
++	        private String delpri;
++
++	        public ChangePriorityThread(HBaseAdmin admin, String tablename,
++	            String tablepri, String scanpri, String putpri, String getpri,
++	            String delpri) {
++	          this.admin = admin;
++	          this.tablename = tablename;
++	          this.tablepri = tablepri;
++	          this.scanpri = scanpri;
++	          this.putpri = putpri;
++	          this.getpri = getpri;
++	          this.delpri = delpri;
++	        }
++
++	        public void run() {
++	          synchronized (tablename) {
++	            HTableDescriptor table = null;
++	            try {
++	              System.out.println("before disable table!!");
++	              if (!admin.isTableDisabled(Bytes.toBytes(tablename))) {
++	                admin.disableTable(tablename);
++	              }
++	              table = admin.getTableDescriptor(Bytes.toBytes(tablename));
++	            } catch (IOException e) {
++
++	            }
++	            byte[] origintablepri = table.getValue(PriorityHBaseServer.PRI_KEY);
++	            byte[] originactionvalue = table
++	                .getValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS);
++	            PriorityHBaseServer.ActionPriorities originaction = new PriorityHBaseServer.ActionPriorities();
++	            originaction.fromBytes(originactionvalue);
++
++	            int originscanprival = originaction.getScanPlus();
++	            int originputprival = originaction.getPutPlus();
++	            int origingetprival = originaction.getGetPlus();
++	            int origindelprival = originaction.getDeletePlus();
++
++	            String tableprival = null;
++	            if (tablepri == null || tablepri.length() <= 0) {
++	              if (origintablepri == null
++	                  || Bytes.toString(origintablepri).length() <= 0) {
++	                tableprival = (new Integer(PriorityHBaseServer.DEFAULT_PRI))
++	                    .toString();
++	              } else {
++	                tableprival = Bytes.toString(origintablepri);
++	              }
++	            } else {
++	              tableprival = tablepri;
++	            }
++	            table.setValue(PriorityHBaseServer.PRI_KEY,
++	                Bytes.toBytes(tableprival));
++	            try {
++	              int scanprival = (scanpri == null || scanpri.length() <= 0) ? originscanprival
++	                  : Integer.valueOf(scanpri);
++	              int putprival = (putpri == null || putpri.length() <= 0) ? originputprival
++	                  : Integer.valueOf(putpri);
++	              int getprival = (getpri == null || getpri.length() <= 0) ? origingetprival
++	                  : Integer.valueOf(getpri);
++	              int delprival = (delpri == null || delpri.length() <= 0) ? origindelprival
++	                  : Integer.valueOf(delpri);
++	              table.setValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS,
++	                  new PriorityHBaseServer.ActionPriorities(scanprival,
++	                      putprival, getprival, delprival).toBytes());
++	              admin.modifyTable(Bytes.toBytes(tablename), table);
++	            } catch (IOException e) {
++	            }
++	            try {
++	              admin.enableTable(tablename);
++	            } catch (IOException ex) {
++	            }
++	          }
++	        }
++
++	      }
++</%java>
++<h2>Change priority</h2>
++<%java>
++		  String tablename = request.getParameter("tablename");
++	      String tablepri = request.getParameter("tablepri");
++	      String scanpri = request.getParameter("scanpri");
++	      String putpri = request.getParameter("putpri");
++	      String getpri = request.getParameter("getpri");
++	      String delpri = request.getParameter("delpri");
++	      try {
++	        int checkformat = 0;
++	        if (tablepri != null && tablepri.length() > 0) {
++	          checkformat = Integer.valueOf(tablepri);
++	        }
++	        if (scanpri != null && scanpri.length() > 0) {
++	          checkformat = Integer.valueOf(scanpri);
++	        }
++	        if (putpri != null && putpri.length() > 0) {
++	          checkformat = Integer.valueOf(putpri);
++	        }
++	        if (getpri != null && getpri.length() > 0) {
++	          checkformat = Integer.valueOf(getpri);
++	        }
++	        if (delpri != null && delpri.length() > 0) {
++	          checkformat = Integer.valueOf(delpri);
++	        }
++	      } catch (Exception e) {
++</%java>
++	       <script type='text/javascript'>
++	       	alert('Priority value must be integer ,check carefully!')
++	        history.back(-1)
++	       </script>
++<%java>
++	        return;
++	      }
++	      Configuration conf = HBaseConfiguration.create();
++	      HBaseAdmin admin = new HBaseAdmin(conf);
++	      if (!admin.tableExists(Bytes.toBytes(tablename))) {
++	        return;
++	      }
++</%java>
++<%if !admin.tableExists(Bytes.toBytes(tablename)) %>
++This table <% tablename %> don't exist in this hbase.
++<%else>
++<%java>
++		  Thread changetd = new ChangePriorityThread(admin, tablename, tablepri,
++	          scanpri, putpri, getpri, delpri);
++	      changetd.setName("cahngetd");
++	      changetd.start();
++</%java>
++	       <script type='text/javascript'>
++	       	alert('Table priority has been changing , please wait ...')
++	        history.back(-1)
++	       </script>
++</%if>
++</body>
++</html>
+diff -uNr trunk/src/main/jamon/org/apache/hbase/tmpl/table/tablepriority.jamon local/src/main/jamon/org/apache/hbase/tmpl/table/tablepriority.jamon
+--- src/main/jamon/org/apache/hbase/tmpl/table/tablepriority.jamon	(revision 0)
++++ src/main/jamon/org/apache/hbase/tmpl/table/tablepriority.jamon	(working copy)
+@@ -0,0 +1,130 @@
++<%doc>
++Copyright 2011 The Apache Software Foundation
++
++Licensed to the Apache Software Foundation (ASF) under one
++or more contributor license agreements.  See the NOTICE file
++distributed with this work for additional information
++regarding copyright ownership.  The ASF licenses this file
++to you under the Apache License, Version 2.0 (the
++"License"); you may not use this file except in compliance
++with the License.  You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++</%doc>
++<%import>
++org.apache.hadoop.conf.Configuration;
++org.apache.hadoop.hbase.HBaseConfiguration;
++org.apache.hadoop.hbase.HTableDescriptor;
++org.apache.hadoop.hbase.MasterNotRunningException;
++org.apache.hadoop.hbase.ZooKeeperConnectionException;
++org.apache.hadoop.hbase.client.HBaseAdmin;
++org.apache.hadoop.hbase.ipc.PriorityHBaseServer;
++org.apache.hadoop.hbase.util.Bytes;
++</%import>
++<%java>
++      Configuration conf = HBaseConfiguration.create();
++	  HBaseAdmin admin = null;
++	  try {
++	    admin = new HBaseAdmin(conf);
++	  } catch (Exception e) {
++	    out.println("Can't connect hbase ,check carefullt!");
++	    return;
++	  }
++	  HTableDescriptor[] tables = null;
++	  try {
++	    tables = admin.listTables();
++	  } catch (IOException e) {
++	    e.printStackTrace();
++	  }
++</%java>
++<?xml version="1.0" encoding="UTF-8" ?>
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" 
++  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
++<html xmlns="http://www.w3.org/1999/xhtml">
++<head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/>
++<title>Table Priority</title>
++<link rel="stylesheet" type="text/css" href="/static/hbase.css" />
++<script type="text/javascript">
++	function validateform(){
++		var result = confirm("Are you sure to change table priority??");
++		if(result == true){
++			return true;
++		}else{
++			return false;
++		}
++	}
++</script>
++</head>
++
++<body>
++<a id="logo" href="http://wiki.apache.org/lucene-hadoop/Hbase"><img src="/static/hbase_logo_med.gif" alt="HBase Logo" title="HBase Logo" /></a>
++<h1 id="page_title">Table Priority</h1>
++<p id="links_menu"><a href="/logs/">Local logs</a>, <a href="/stacks">Thread Dump</a>, <a href="/logLevel">Log Level</a></p>
++<hr id="head_rule" />
++
++<h2>Table priority</h2>
++<%if tables.length <= 0 %>
++No tables in hbase.
++<%else>
++	<table>
++	  <caption>Show Table Priority</captipn>
++	  <tr>
++	  <td>Tablename</td>;
++	  <td>Priority</td>;
++	  <td>Scan</td>
++	  <td>Put</td>
++	  <td>Get</td>
++	  <td>Delete</td>
++	  <td>Change</td>
++	  </tr>
++	  <%for HTableDescriptor table : tables %>
++	  	<tr><td><% table.getNameAsString() %></td>
++	  	<%if !admin.isTableEnabled(table.getName()) %>
++			<td> Waiting Change...</td></tr>
++	    	<%java> 
++       			continue;
++			</%java>
++		<%else>
++			<%java  
++				String tablepri = Bytes.toString(table.getValue(PriorityHBaseServer.PRI_KEY));
++			</%java>
++			<%if (tablepri == null || tablepri.length() <= 0) %>
++				<%java>
++					tablepri = new Integer(PriorityHBaseServer.DEFAULT_PRI).toString();
++				</%java>
++			<%if>
++			<td><% tablepri %></td>
++			<%java>
++			byte[] actionvalue = table.getValue(PriorityHBaseServer.PRI_KEY_ACTION_PLUS);
++	        PriorityHBaseServer.ActionPriorities action = new PriorityHBaseServer.ActionPriorities();
++	        action.fromBytes(actionvalue);
++			</%java>
++			<td><% action.getScanPlus() %></td>;
++	    	<td><% action.getPutPlus() %></td>";
++	    	<td><% action.getGetPlus() %></td>
++	    	<td><% action.getDeletePlus() %></td>
++	   		<td>  </td>
++	    	</tr>
++	    	<form name='changepri' action='/changepriority' method='post' onSubmit='return validateform()'>");
++	    	<tr>
++	    	<td><input type='hidden'name='tablename' value='<% table.getNameAsString() %>'></td>
++	    	<td><input type='text' name='tablepri'></td>
++	   		<td><input type='text' name='scanpri'></td>
++	    	<td><input type='text' name='putpri'></td>
++	    	<td><input type='text' name='getpri'></td>
++	   		<td><input type='text' name='delpri'></td>
++	    	<td><input type='submit' name='changebtn' value='Change' ></td>
++	    	</tr>
++	  		</form>
++		</%if>	
++	  </%for>
++	</table>
++</%if>
++</body>
++</html>
