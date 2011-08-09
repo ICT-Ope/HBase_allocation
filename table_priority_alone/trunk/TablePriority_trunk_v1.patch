@@ -11,6 +11,7 @@ diff -uNr trunk/src/main/java/org/apache/hadoop/hbase/ipc/HBaseRPC.java trunk_pr
 +    }
      return getServer(instance.getClass(), instance, ifaces, bindAddress, port, numHandlers, metaHandlerCount, verbose, conf, highPriorityLevel);
    }
+
 diff -uNr trunk/src/main/java/org/apache/hadoop/hbase/ipc/HBaseServer.java trunk_pri/src/main/java/org/apache/hadoop/hbase/ipc/HBaseServer.java
 --- src/main/java/org/apache/hadoop/hbase/ipc/HBaseServer.java	(revision 1155226)
 +++ src/main/java/org/apache/hadoop/hbase/ipc/HBaseServer.java	(working copy)
